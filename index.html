@@ -171,6 +171,11 @@ body:before{content:"";position:fixed;inset:0 0 auto;height:4px;z-index:999;back
 .top .account-actions .btn:hover{background:#2b3034;border-color:#62686d}
 .top .account-actions .btn.ghost{background:transparent;color:#e5e6e4;border-color:#555b60;box-shadow:none}
 .top .account-actions .btn.ghost:hover{background:#202428}
+/* Keep Sign out and Theme controls identical in shape and dimensions. */
+.top .account-actions #accountLogout,
+.top .account-actions #themeBtn{min-height:38px;padding:9px 14px;border:1px solid #555b60;border-radius:6px;background:transparent;color:#e5e6e4;box-shadow:none;font:inherit;font-size:11px;font-weight:600;letter-spacing:.035em;line-height:1.2}
+.top .account-actions #accountLogout:hover,
+.top .account-actions #themeBtn:hover{background:#202428;border-color:#62686d}
 #accountLogout[hidden],#accountOpen[hidden]{display:none!important}
 .top h1:before{content:"PORTFOLIO / ";color:#ff8700}
 .top .sub{margin-top:9px;color:#b5babd;font-size:13px;letter-spacing:.015em}
