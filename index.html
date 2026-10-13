@@ -998,7 +998,8 @@ function renderHoldings(){
   const cols=[['name','Instrument',0],['qty','Qty',1],['avg','Avg cost',1],['ltp','Last price',1],['dayPct','Day',1],['dayPnl','Day P&L',1],['value','Value',1],['unreal','Profit',1],['unrealPct','Return',1],['w','Weight',1]];
   const classes={};for(const p of h)(classes[p.cls]||(classes[p.cls]=[])).push(p);
   let body='';
-  if(aum>0)body='<tr class="grp"><td><b>Cash / remaining funds</b></td><td></td><td></td><td></td><td></td><td></td><td class="n">'+inr(cash)+'</td><td></td><td></td><td class="n">'+pc(cash/aum,1)+'</td><td></td></tr>';\n  if(!h.length&&aum<=0)body='<tr><td colspan="11">'+emptyMsg()+'</td></tr>';
+  if(aum>0)body='<tr class="grp"><td><b>Cash / remaining funds</b></td><td></td><td></td><td></td><td></td><td></td><td class="n">'+inr(cash)+'</td><td></td><td></td><td class="n">'+pc(cash/aum,1)+'</td><td></td></tr>';
+  if(!h.length&&aum<=0)body='<tr><td colspan="11">'+emptyMsg()+'</td></tr>';
   const order=CLASSES.filter(c=>classes[c]).concat(Object.keys(classes).filter(c=>!CLASSES.includes(c)));
   for(const c of order){
     const assetItems=classes[c],assetKey='ASSET:'+c,assetOpen=!COLLAPSED[assetKey];
@@ -1744,7 +1745,8 @@ $('#fundForm').addEventListener('submit',e=>{
   e.preventDefault();
   const M=$('#fundMsg'),name=$('#nfName').value.trim(),assets=Number($('#nfAssets').value),units=Number($('#nfUnits').value);
   if(S.mode==='demo'){msg(M,'This is the example portfolio. Import your holdings or start empty before creating funds.','err');return}
-  if(!name){msg(M,'Enter a fund name.','err');return}\n  if(!Number.isFinite(assets)||assets<0||!Number.isFinite(units)||units<=0){msg(M,'Enter a valid initial AUM and a positive number of NAV units.','err');return}
+  if(!name){msg(M,'Enter a fund name.','err');return}
+  if(!Number.isFinite(assets)||assets<0||!Number.isFinite(units)||units<=0){msg(M,'Enter a valid initial AUM and a positive number of NAV units.','err');return}
   if(S.funds.some(f=>f.name.toLowerCase()===name.toLowerCase())){msg(M,'A fund with that name exists.','err');return}
   S.funds.push({id:newFundId(),name,bench:$('#nfBench').value,totalAssets:assets,units});save();
   $('#nfName').value='';msg(M,'Created '+name+' with '+inr(assets)+' initial AUM, '+nm(units)+' units and initial NAV '+inr(assets/units,4)+'. Choose it in the transaction form to add holdings.','ok');renderAll();
