@@ -185,8 +185,18 @@ body:before{content:"";position:fixed;inset:0 0 auto;height:4px;z-index:999;back
 .top .btn:not(.ghost){box-shadow:0 4px 0 #9c5100}
 #themeBtn{background:transparent;color:#e5e6e4;border-color:#41464a}
 /* Final override: both controls match the filled account-status/sign-in surfaces. */
+/* Match account controls to the rounded cloud-status pill. */
 .top .account-actions #accountLogout,
-.top .account-actions #themeBtn{background:#202428!important;border:1px solid #454a4e!important;color:#f0f1ef!important;box-shadow:none!important}
+.top .account-actions #themeBtn{
+  min-height:38px!important;padding:9px 20px!important;
+  border-radius:999px!important;background:#202428!important;
+  border:1px solid #41464a!important;color:#f0f1ef!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important;
+}
+.top .account-actions #accountLogout:hover,
+.top .account-actions #themeBtn:hover{
+  background:#2b3034!important;border-color:#62686d!important;
+}
 .top .account-actions #accountLogout:hover,
 .top .account-actions #themeBtn:hover{background:#2b3034!important;border-color:#62686d!important}
 /* Liquid-glass section switcher: a softly floating glass rail instead of an underline. */
