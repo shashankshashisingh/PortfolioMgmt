@@ -137,6 +137,50 @@ section[hidden]{display:none!important}
 .account-card .account-link{background:none;border:0;color:var(--accent);text-decoration:underline;cursor:pointer;font:inherit;font-size:12px;padding:5px}
 @media(max-width:640px){.account-actions{justify-content:flex-start}.account-card{padding:18px}}
 
+
+/* Motorsport-inspired Portfolio Desk theme */
+:root{--bg:#0b0d0f;--surface:#15181b;--ink:#f5f5f2;--muted:#a1a6aa;--line:#303438;--soft:#1d2124;--accent:#ff8700;--accent-ink:#151515;--gain:#5ddc99;--loss:#ff7168;--warn:#ffc15a;--c1:#ff8700;--c2:#f5f5f2;--c3:#ffb14d;--c4:#d95c00;--c5:#8d9aa4;--c6:#d4b04a;--c7:#b3bac0;--c8:#ec6d46;--c9:#7e8b93;--c10:#a8bf66;--c11:#677077;--bench:#8c969d;color-scheme:dark}
+:root[data-theme="dark"]{--bg:#0b0d0f;--surface:#15181b;--ink:#f5f5f2;--muted:#a1a6aa;--line:#303438;--soft:#1d2124;--accent:#ff8700;--accent-ink:#151515;--gain:#5ddc99;--loss:#ff7168;--warn:#ffc15a;--c1:#ff8700;--c2:#f5f5f2;--c3:#ffb14d;--c4:#d95c00;--c5:#8d9aa4;--c6:#d4b04a;--c7:#b3bac0;--c8:#ec6d46;--c9:#7e8b93;--c10:#a8bf66;--c11:#677077;--bench:#8c969d;color-scheme:dark}
+:root[data-theme="light"]{--bg:#f3f2ee;--surface:#fff;--ink:#17191b;--muted:#62686d;--line:#d8d8d3;--soft:#ebeae5;--accent:#ed7900;--accent-ink:#fff;--gain:#167943;--loss:#b72e25;--warn:#916000;--c1:#ed7900;--c2:#34393d;--c3:#ffae45;--c4:#b85b14;--c5:#8c596b;--c6:#a88424;--c7:#83766a;--c8:#338c9c;--c9:#647783;--c10:#768a35;--c11:#98a09b;--bench:#6b777d;color-scheme:light}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b0d0f;--surface:#15181b;--ink:#f5f5f2;--muted:#a1a6aa;--line:#303438;--soft:#1d2124;--accent:#ff8700;--accent-ink:#151515;--gain:#5ddc99;--loss:#ff7168;--warn:#ffc15a;--c1:#ff8700;--c2:#f5f5f2;--c3:#ffb14d;--c4:#d95c00;--c5:#8d9aa4;--c6:#d4b04a;--c7:#b3bac0;--c8:#ec6d46;--c9:#7e8b93;--c10:#a8bf66;--c11:#677077;--bench:#8c969d;color-scheme:dark}}
+body{background:radial-gradient(ellipse at 95% 0%,rgba(255,135,0,.09),transparent 34rem),var(--bg);padding-top:28px}
+body:before{content:"";position:fixed;inset:0 0 auto;height:4px;z-index:999;background:linear-gradient(90deg,#ff8700 0 17%,#f5f5f2 17% 19%,#ff8700 19% 31%,transparent 31%);pointer-events:none}
+.app{max-width:1440px;gap:19px}
+.top{position:relative;align-items:center;min-height:132px;padding:24px 26px;background:linear-gradient(112deg,#171a1d,#111315 63%,#25201a);border:1px solid #34383b;border-radius:13px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.18)}
+.top:after{content:"";position:absolute;right:-44px;top:-72px;width:270px;height:270px;border:34px solid rgba(255,135,0,.13);transform:rotate(28deg);pointer-events:none}
+.top>div,.top .status{position:relative;z-index:1}
+.top h1{font-size:clamp(26px,3vw,38px);font-weight:800;letter-spacing:-.045em;text-transform:uppercase;line-height:1.05}
+.top h1:before{content:"PORTFOLIO / ";color:#ff8700}
+.top .sub{margin-top:9px;color:#b5babd;font-size:13px;letter-spacing:.015em}
+.top .status{align-items:flex-end;flex-direction:column}
+.top .pill{background:#202428;border-color:#41464a;color:#e5e6e4}
+.top .btn{border-radius:5px;text-transform:uppercase;letter-spacing:.035em;font-size:11px}
+.top .btn:not(.ghost){box-shadow:0 4px 0 #9c5100}
+#themeBtn{background:transparent;color:#e5e6e4;border-color:#41464a}
+.tabs{border-bottom:1px solid var(--line);gap:5px;padding:0 2px}
+.tabs button{position:relative;padding:13px 15px 14px;text-transform:uppercase;font-size:11px;letter-spacing:.075em;font-weight:700}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs button[aria-selected="true"]:after{content:"";position:absolute;bottom:-1px;left:14px;right:14px;height:2px;background:var(--accent);box-shadow:0 0 12px rgba(255,135,0,.5)}
+.panel,.strip,details{border-radius:9px;border-color:var(--line);box-shadow:0 7px 24px rgba(0,0,0,.07)}
+.panel{padding:19px}
+.panel h2{font-size:11px;letter-spacing:.12em;color:var(--muted)}
+.strip>div{padding:17px 19px}
+.k{font-size:10px;letter-spacing:.11em;font-weight:700}
+.v{font-size:24px;letter-spacing:-.035em}.v.big{font-size:31px}
+.btn{border-radius:5px;text-transform:uppercase;letter-spacing:.025em}
+.btn:active,.chip:active{transform:translateY(1px)}
+.chip{border-radius:4px;font-size:11px;text-transform:uppercase;letter-spacing:.035em;font-weight:600}
+.chip[aria-pressed="true"]{box-shadow:0 2px 0 rgba(255,135,0,.3)}
+input,select,textarea{border-radius:5px}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+th{font-size:10px;letter-spacing:.095em}
+td{padding-top:10px;padding-bottom:10px}
+tr.grp td{border-top:1px solid var(--line)}
+.alloc{height:10px;border-radius:2px}.row{padding:8px 0}.bar{border-radius:1px}
+details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
+.account-card{border-radius:10px}.account-card h2{letter-spacing:-.03em}
+@media(max-width:640px){body{padding-inline:12px;padding-top:18px}.top{padding:20px 17px;align-items:flex-start;gap:18px}.top .status{align-items:flex-start}.top:after{right:-120px}.tabs button{padding:12px 11px;font-size:10px}.panel{padding:14px}}
+
 </style>
 
 <div class="app">
