@@ -397,7 +397,7 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
           <label class="fl">Date<input type="date" id="fDate" required></label>
           <label class="fl">Side<select id="fType"><option value="BUY">Buy</option><option value="SELL">Sell</option><option value="SHORT">Short sell</option><option value="COVER">Cover short</option></select></label>
           <label class="fl">Trade product<select id="fProduct"><option value="AUTO">Auto by asset class</option><option value="EQ_DELIVERY">Equity delivery</option><option value="EQ_INTRADAY">Equity intraday</option><option value="EQ_MTF">Equity MTF</option><option value="EQ_FUTURES">Equity futures</option><option value="EQ_OPTIONS">Equity options</option><option value="COM_FUTURES">Commodity futures</option><option value="COM_OPTIONS">Commodity options</option></select></label>
-          <label class="fl">Symbol<input id="fSym" list="symList" placeholder="RELIANCE" required><datalist id="symList"></datalist></label>
+          <label class="fl">Symbol / ticker<input id="fSym" list="symList" placeholder="Type ticker, e.g. RELIANCE" autocapitalize="characters" spellcheck="false" required><datalist id="symList"></datalist><span class="note">Search by exchange symbol/ticker; suggestions show the symbol and company name.</span></label>
           <label class="fl">Name<input id="fName" placeholder="Reliance Industries"></label>
           <label class="fl">Asset class<select id="fCls"></select></label>
           <label class="fl">Quantity / units<input type="number" id="fQty" step="any" min="0" required><span class="note" id="fQtyAvailable" aria-live="polite">Available shares will appear when you select a symbol and trade side.</span></label>
@@ -408,7 +408,7 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
           <button class="btn" type="submit">Add</button>
         </form>
         <div class="msg" id="txnMsg"></div>
-        <p class="note">Typing a symbol fills in the name, asset class and sector using Claude's general knowledge, so check them. Futures and options are valued as quantity times price. Short sales reserve margin equal to 115% of current short notional; use Cover short to close a short position. Prices are resolved from the latest available NSE Bhavcopy close or another available price.</p>
+        <p class="note">Enter the exchange ticker (for example, RELIANCE or INFY) in Symbol / ticker; the company name, asset class and sector can be filled from the local NSE symbol directory. Use Look up symbol if it is not in the directory. Check the details before saving. Futures and options are valued as quantity times price. Short sales reserve margin equal to 115% of current short notional; use Cover short to close a short position. Prices are resolved from the latest available NSE Bhavcopy close or another available price.</p>
       </div>
     </details>
     <details id="priceBox">
@@ -1184,7 +1184,7 @@ function fillSymbolLists(){
   const sig=symSet.size+':'+Object.keys(S.series).length;
   if(fillSymbolLists.sig!==sig){
     fillSymbolLists.sig=sig;
-    $('#symList').innerHTML=[...symSet].sort().map(s=>'<option value="'+esc(s)+'">'+esc(((S.meta[s]||{}).name)||(FEED.dir[s]&&FEED.dir[s].n)||'')+'</option>').join('');
+    $('#symList').innerHTML=[...symSet].sort().map(s=>{const n=((S.meta[s]||{}).name)||(FEED.dir[s]&&FEED.dir[s].n)||'';return '<option value="'+esc(s)+'" label="'+esc(s+(n?' — '+n:''))+'"></option>'}).join('');
   }
   const bk=processTxns(S.txns);
   const held=Object.keys(bk).filter(s=>Math.abs(sum(bk[s].lots.map(l=>l.qty))-sum((bk[s].shortLots||[]).map(l=>l.qty)))>1e-9).sort();
