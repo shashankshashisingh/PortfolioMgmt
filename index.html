@@ -229,7 +229,7 @@ section[hidden]{display:none!important}
       <div id="fundMgmt"></div>
       <form class="f" id="fundForm" autocomplete="off" style="margin-top:14px">
         <label class="fl" style="grid-column:span 2">New fund name<input id="nfName" placeholder="Small Cap" required></label>
-        <label class="fl" style="grid-column:span 2">Benchmark<select id="nfBench"></select></label>
+        <label class="fl">Initial AUM / cash (₹)<input id="nfAssets" type="number" min="0" step="any" value="1000000" required></label><label class="fl">Units for NAV<input id="nfUnits" type="number" min="1" step="any" value="100000" required></label><label class="fl">Benchmark<select id="nfBench"></select></label>
         <button class="btn" type="submit">Create fund</button>
       </form>
       <div class="msg" id="fundMsg"></div>
@@ -706,7 +706,7 @@ function normalize(){
   for(const s in S.meta){const m=S.meta[s];if(m&&m.cls&&m.cls!=='Index'){m.cls=normClass(m.cls)||'Other'}}
   for(const v in S.targets){const t=S.targets[v];if(t&&typeof t==='object'){const o={};for(const c in t){const k=normClass(c)||c;o[k]=(o[k]||0)+t[c]}S.targets[v]=o}}
   if(!Array.isArray(S.funds)||!S.funds.length)S.funds=[{id:'f1',name:'Main',bench:'',totalAssets:0}];
-  for(const f of S.funds){const a=Number(f.totalAssets);f.totalAssets=Number.isFinite(a)&&a>=0?a:0;}
+  for(const f of S.funds){const a=Number(f.totalAssets);f.totalAssets=Number.isFinite(a)&&a>=0?a:0;const u=Number(f.units);f.units=Number.isFinite(u)&&u>0?u:100000;}
   for(const t of S.txns)if(!t.fund||!S.funds.some(f=>f.id===t.fund))t.fund=S.funds[0].id;
   const tk=Object.keys(S.targets||{});
   if(tk.length&&typeof S.targets[tk[0]]==='number')S.targets={ALL:S.targets};
@@ -989,13 +989,16 @@ function spark(vals){
 }
 const COLLAPSED={};
 function renderHoldings(){
-  const h=C.held||[];
+  const fundId=S.view!=='ALL'?S.view:(S.funds[0]&&S.funds[0].id),fund=S.funds.find(f=>f.id===fundId),fundTx=S.txns.filter(t=>t.fund===fundId),fundA=analyze(fundTx,C.px,C.dates,C.n),aum=Number(fund&&fund.totalAssets)||0;
+  const h=(fundId?fundA.held:C.held)||[];
+  const usedLong=sum(h.filter(p=>p.side!=='SHORT').map(p=>p.value)),cash=Math.max(0,aum-usedLong-sum(h.filter(p=>p.side==='SHORT').map(p=>p.value*1.15)));
+  for(const p of h)p.w=aum>0?p.value/aum:0;
   const k=S.sort.k,dir=S.sort.dir;
   const cmp=(a,b)=>{const x=a[k],y=b[k];return (typeof x==='string'?x.localeCompare(y):(x-y))*dir};
   const cols=[['name','Instrument',0],['qty','Qty',1],['avg','Avg cost',1],['ltp','Last price',1],['dayPct','Day',1],['dayPnl','Day P&L',1],['value','Value',1],['unreal','Profit',1],['unrealPct','Return',1],['w','Weight',1]];
   const classes={};for(const p of h)(classes[p.cls]||(classes[p.cls]=[])).push(p);
   let body='';
-  if(!h.length)body='<tr><td colspan="11">'+emptyMsg()+'</td></tr>';
+  if(aum>0)body='<tr class="grp"><td><b>Cash / remaining funds</b></td><td></td><td></td><td></td><td></td><td></td><td class="n">'+inr(cash)+'</td><td></td><td></td><td class="n">'+pc(cash/aum,1)+'</td><td></td></tr>';\n  if(!h.length&&aum<=0)body='<tr><td colspan="11">'+emptyMsg()+'</td></tr>';
   const order=CLASSES.filter(c=>classes[c]).concat(Object.keys(classes).filter(c=>!CLASSES.includes(c)));
   for(const c of order){
     const assetItems=classes[c],assetKey='ASSET:'+c,assetOpen=!COLLAPSED[assetKey];
@@ -1739,12 +1742,12 @@ $('#txnForm').addEventListener('submit',e=>{
 });
 $('#fundForm').addEventListener('submit',e=>{
   e.preventDefault();
-  const M=$('#fundMsg'),name=$('#nfName').value.trim();
+  const M=$('#fundMsg'),name=$('#nfName').value.trim(),assets=Number($('#nfAssets').value),units=Number($('#nfUnits').value);
   if(S.mode==='demo'){msg(M,'This is the example portfolio. Import your holdings or start empty before creating funds.','err');return}
-  if(!name){msg(M,'Enter a fund name.','err');return}
+  if(!name){msg(M,'Enter a fund name.','err');return}\n  if(!Number.isFinite(assets)||assets<0||!Number.isFinite(units)||units<=0){msg(M,'Enter a valid initial AUM and a positive number of NAV units.','err');return}
   if(S.funds.some(f=>f.name.toLowerCase()===name.toLowerCase())){msg(M,'A fund with that name exists.','err');return}
-  S.funds.push({id:newFundId(),name,bench:$('#nfBench').value});save();
-  $('#nfName').value='';msg(M,'Created '+name+'. Choose it in the transaction form to add holdings.','ok');renderAll();
+  S.funds.push({id:newFundId(),name,bench:$('#nfBench').value,totalAssets:assets,units});save();
+  $('#nfName').value='';msg(M,'Created '+name+' with '+inr(assets)+' initial AUM, '+nm(units)+' units and initial NAV '+inr(assets/units,4)+'. Choose it in the transaction form to add holdings.','ok');renderAll();
 });
 $('#priceForm').addEventListener('submit',e=>{
   e.preventDefault();
