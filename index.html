@@ -226,6 +226,34 @@ body:before{content:"";position:fixed;inset:0 0 auto;height:4px;z-index:999;back
 .btn:active,.chip:active{transform:translateY(1px)}
 .chip{border-radius:4px;font-size:11px;text-transform:uppercase;letter-spacing:.035em;font-weight:600}
 .chip[aria-pressed="true"]{box-shadow:0 2px 0 rgba(255,135,0,.3)}
+/* Liquid-glass fund and period filters, matching the section switcher above. */
+.periodbar{gap:8px}
+.periodbar .lbl{margin-right:6px}
+.periodbar .chip{
+  min-height:39px;padding:8px 17px;border:1px solid rgba(130,136,139,.24);
+  border-radius:10px;color:var(--ink);
+  background:linear-gradient(145deg,rgba(255,255,255,.7),rgba(255,255,255,.34));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.85),0 2px 6px rgba(28,34,38,.035);
+  -webkit-backdrop-filter:blur(14px) saturate(150%);backdrop-filter:blur(14px) saturate(150%);
+  transition:background .2s ease,border-color .2s ease,box-shadow .2s ease,transform .2s ease
+}
+.periodbar .chip:hover{border-color:rgba(130,136,139,.4);background:linear-gradient(145deg,rgba(255,255,255,.88),rgba(255,255,255,.48))}
+.periodbar .chip[aria-pressed="true"]{
+  color:var(--ink);border-color:rgba(255,255,255,.8);
+  background:linear-gradient(145deg,rgba(255,255,255,.96),rgba(255,255,255,.56));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.98),inset 0 -1px 0 rgba(120,125,130,.08),0 4px 12px rgba(28,34,38,.1),0 0 0 1px rgba(255,255,255,.25);
+}
+:root[data-theme="dark"] .periodbar .chip{
+  color:var(--ink);border-color:rgba(255,255,255,.12);
+  background:linear-gradient(145deg,rgba(255,255,255,.1),rgba(255,255,255,.035));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 2px 6px rgba(0,0,0,.12)
+}
+:root[data-theme="dark"] .periodbar .chip[aria-pressed="true"]{
+  border-color:rgba(255,255,255,.22);
+  background:linear-gradient(145deg,rgba(255,255,255,.2),rgba(255,255,255,.075));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.24),0 4px 12px rgba(0,0,0,.2)
+}
+@media(prefers-reduced-motion:reduce){.periodbar .chip{transition:none}}
 input,select,textarea{border-radius:5px}
 input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 th{font-size:10px;letter-spacing:.095em}
