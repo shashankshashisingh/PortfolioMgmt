@@ -184,6 +184,11 @@ body:before{content:"";position:fixed;inset:0 0 auto;height:4px;z-index:999;back
 .top .btn{border-radius:5px;text-transform:uppercase;letter-spacing:.035em;font-size:11px}
 .top .btn:not(.ghost){box-shadow:0 4px 0 #9c5100}
 #themeBtn{background:transparent;color:#e5e6e4;border-color:#41464a}
+/* Final override: both controls match the filled account-status/sign-in surfaces. */
+.top .account-actions #accountLogout,
+.top .account-actions #themeBtn{background:#202428!important;border:1px solid #454a4e!important;color:#f0f1ef!important;box-shadow:none!important}
+.top .account-actions #accountLogout:hover,
+.top .account-actions #themeBtn:hover{background:#2b3034!important;border-color:#62686d!important}
 .tabs{border-bottom:1px solid var(--line);gap:5px;padding:0 2px}
 .tabs button{position:relative;padding:13px 15px 14px;text-transform:uppercase;font-family:'Brier','Mona Sans',sans-serif;font-size:11px;letter-spacing:.075em;font-weight:700}
 .tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
