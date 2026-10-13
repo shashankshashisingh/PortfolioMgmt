@@ -1,7 +1,22 @@
 <title>Portfolio Desk</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="preconnect" href="https://raw.githubusercontent.com">
+<style>
+/* Lando Norris-inspired type pairing: Brier display + Mona Sans for UI and data. */
+@font-face{
+  font-family:"Brier";
+  src:url("https://raw.githubusercontent.com/xing0325/funshine-lando/master/public/fonts/67b6113a220f85ad6497495a_Brier-Bold.woff2") format("woff2");
+  font-style:normal;
+  font-weight:700;
+  font-display:swap;
+}
+@font-face{
+  font-family:"Mona Sans";
+  src:url("https://raw.githubusercontent.com/xing0325/funshine-lando/master/public/fonts/67bc6274c5b4108b123aa4d5_MonaSans-VariableFont_wdth_wght.woff2") format("woff2");
+  font-style:normal;
+  font-weight:100 900;
+  font-display:swap;
+}
+</style>
 <style>
 /* Layout: a trading-desk ledger. Quiet tabbed shell, hairline-divided figure strips, one accent. */
 :root{
@@ -9,8 +24,8 @@
   --accent:#0B6B5D; --accent-ink:#FFFFFF; --gain:#17803F; --loss:#B93A2E; --warn:#9A6200;
   --c1:#0B6B5D; --c2:#3B6FB6; --c3:#7A5AA6; --c4:#D0662E; --c5:#B5527A; --c6:#C48A12; --c7:#8C6E4A; --c8:#2E8FA3; --c9:#5F7384; --c10:#7C8A2E; --c11:#98A39D;
   --bench:#6B7A74;
-  --font:'Instrument Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --font:'Mona Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:'Mona Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0D1311; --surface:#151D1A; --ink:#E5ECE8; --muted:#92A09A; --line:#25302C; --soft:#1B2521;
@@ -149,7 +164,7 @@ body:before{content:"";position:fixed;inset:0 0 auto;height:4px;z-index:999;back
 .top{position:relative;align-items:center;min-height:132px;padding:24px 26px;background:linear-gradient(112deg,#171a1d,#111315 63%,#25201a);border:1px solid #34383b;border-radius:13px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.18)}
 .top:after{content:"";position:absolute;right:-44px;top:-72px;width:270px;height:270px;border:34px solid rgba(255,135,0,.13);transform:rotate(28deg);pointer-events:none}
 .top>div,.top .status{position:relative;z-index:1}
-.top h1{font-size:clamp(26px,3vw,38px);font-weight:800;letter-spacing:-.045em;text-transform:uppercase;line-height:1.05}
+.top h1{font-family:'Brier','Mona Sans',sans-serif;font-size:clamp(26px,3vw,38px);font-weight:700;letter-spacing:-.045em;text-transform:uppercase;line-height:1.05}
 .top h1:before{content:"PORTFOLIO / ";color:#ff8700}
 .top .sub{margin-top:9px;color:#b5babd;font-size:13px;letter-spacing:.015em}
 .top .status{align-items:flex-end;flex-direction:column}
@@ -163,7 +178,7 @@ body:before{content:"";position:fixed;inset:0 0 auto;height:4px;z-index:999;back
 .tabs button[aria-selected="true"]:after{content:"";position:absolute;bottom:-1px;left:14px;right:14px;height:2px;background:var(--accent);box-shadow:0 0 12px rgba(255,135,0,.5)}
 .panel,.strip,details{border-radius:9px;border-color:var(--line);box-shadow:0 7px 24px rgba(0,0,0,.07)}
 .panel{padding:19px}
-.panel h2{font-size:11px;letter-spacing:.12em;color:var(--muted)}
+.panel h2{font-family:'Brier','Mona Sans',sans-serif;font-size:11px;letter-spacing:.12em;color:var(--muted)}
 .strip>div{padding:17px 19px}
 .k{font-size:10px;letter-spacing:.11em;font-weight:700}
 .v{font-size:24px;letter-spacing:-.035em}.v.big{font-size:31px}
