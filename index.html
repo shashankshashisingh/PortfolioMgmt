@@ -293,6 +293,16 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
 
 
 
+
+/* Keep all six charge summary metrics on one compact row on desktop. */
+#chargeKpis{grid-template-columns:repeat(6,minmax(0,1fr))}
+#chargeKpis>div{padding:10px 12px;min-width:0}
+#chargeKpis .k{font-size:9px;letter-spacing:.07em;line-height:1.25;overflow-wrap:anywhere}
+#chargeKpis .v{font-size:22px;line-height:1.2;overflow-wrap:anywhere}
+#chargeKpis .v.big{font-size:26px}
+#chargeKpis .s{font-size:12px;line-height:1.35;overflow-wrap:anywhere}
+@media(max-width:900px){#chargeKpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:560px){#chargeKpis{grid-template-columns:repeat(2,minmax(0,1fr))}#chargeKpis>div{border-left:0;border-top:1px solid var(--line)}#chargeKpis>div:nth-child(-n+2){border-top:0}}
 </style>
 
 <div class="app">
