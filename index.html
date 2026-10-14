@@ -1391,7 +1391,7 @@ function calculateCharges(){
   for(const t of sortTxns(S.txns)){
     const product=chargeProduct(t),notional=Math.max(0,Number(t.qty)*Number(t.price)||0);
     const buy=['BUY','COVER'].includes(t.type),sell=['SELL','SHORT'].includes(t.type);
-    let brokerage=0,exchange=0,stt=0,stamp=0,sebi=notional*CHARGE_RATES.sebi,ipft=0,dp=0,mtfInterest=0,borrowing=t.type==='SHORT'?notional*CHARGE_RATES.borrowing:0,excluded='';
+    let brokerage=0,exchange=0,stt=0,stamp=0,sebi=notional*CHARGE_RATES.sebi,ipft=0,dp=0,mtfInterest=0,borrowing=0,excluded='';
     if(['EQ_DELIVERY','EQ_INTRADAY','EQ_MTF'].includes(product)){
       const r=product==='EQ_DELIVERY'?CHARGE_RATES.equity.delivery:product==='EQ_INTRADAY'?CHARGE_RATES.equity.intraday:CHARGE_RATES.equity.mtf;
       brokerage=r.brokerage!=null?r.brokerage:Math.min(r.cap,notional*r.rate);
@@ -1409,6 +1409,38 @@ function calculateCharges(){
     const gst=(brokerage+exchange+sebi+ipft)*CHARGE_RATES.gst;
     rows.push({t,product,notional,brokerage,exchange,stt,stamp,sebi,ipft,gst,dp,mtfInterest,borrowing,total:brokerage+exchange+stt+stamp+sebi+ipft+gst+dp+mtfInterest+borrowing,excluded});
   }
+  // Annual borrowing fee on short positions: accrue 2% p.a. on short-sale notional
+  // for the actual calendar days each quantity remains open. Covers are matched FIFO;
+  // open quantities accrue through today. Accrued fee is attributed to the SHORT row.
+  const shortGroups={};
+  for(const r of rows)if(['SHORT','COVER'].includes(r.t.type)){
+    const key=[r.t.fund,r.t.symbol].join('|');
+    (shortGroups[key]||(shortGroups[key]=[])).push(r);
+  }
+  const dayMs=86400000,asOf=new Date();asOf.setHours(0,0,0,0);
+  for(const key in shortGroups){
+    const queue=[];
+    for(const r of shortGroups[key].sort((a,b)=>a.t.date<b.t.date?-1:a.t.date>b.t.date?1:0)){
+      if(r.t.type==='SHORT'){
+        queue.push({row:r,qty:Number(r.t.qty)||0,price:Number(r.t.price)||0,date:r.t.date});
+        continue;
+      }
+      let q=Number(r.t.qty)||0;
+      while(q>1e-9&&queue.length){
+        const lot=queue[0],take=Math.min(q,lot.qty);
+        const days=Math.max(0,(Date.parse(r.t.date+'T00:00:00Z')-Date.parse(lot.date+'T00:00:00Z'))/dayMs);
+        lot.row.borrowing+=lot.price*take*CHARGE_RATES.borrowing*days/365;
+        lot.qty-=take;q-=take;
+        if(lot.qty<=1e-9)queue.shift();
+      }
+    }
+    for(const lot of queue){
+      if(lot.qty<=1e-9)continue;
+      const days=Math.max(0,(asOf.getTime()-Date.parse(lot.date+'T00:00:00Z'))/dayMs);
+      lot.row.borrowing+=lot.price*lot.qty*CHARGE_RATES.borrowing*days/365;
+    }
+  }
+  for(const r of rows){r.total+=r.borrowing;}
   // Approximate DP debit once per fund/date/ISIN for delivery sells.
   const dpKeys=new Set();
   for(const r of rows){
@@ -1469,7 +1501,7 @@ function renderCharges(){
     '<div><div class="k">Brokerage · '+(selected?'selected fund':'all funds')+'</div><div class="v">'+inrC(T.brokerage)+'</div><div class="s muted">tariff estimate</div></div>'+
     '<div><div class="k">Taxes + exchange</div><div class="v">'+inrC(T.exchange+T.stt+T.stamp+T.sebi+T.ipft+T.gst)+'</div><div class="s muted">including GST</div></div>'+
     '<div><div class="k">DP + MTF interest</div><div class="v">'+inrC(T.dp+T.mtfInterest)+'</div><div class="s muted">interest is estimated</div></div>'+
-    '<div><div class="k">Borrowing charge</div><div class="v">'+inrC(T.borrowing)+'</div><div class="s muted">2% of short-sale notional</div></div>';
+    '<div><div class="k">Borrowing charge</div><div class="v">'+inrC(T.borrowing)+'</div><div class="s muted">2% p.a.; accrued daily while short is open</div></div>';
   const funds=S.funds.map(f=>({f,d:D.byFund[f.id]||zeroChargeSummary()}));funds.push({f:{id:'ALL',name:'Total — all funds'},d:all});
   $('#chargeFundTable').innerHTML='<table><thead><tr><th>Fund</th><th class="n">Trades</th><th class="n">Notional</th><th class="n">Brokerage</th><th class="n">Taxes / exchange</th><th class="n">DP</th><th class="n">MTF interest</th><th class="n">Borrowing charge</th><th class="n">Total charges</th></tr></thead><tbody>'+
     funds.map(({f,d})=>'<tr'+(f.id==='ALL'?' style="font-weight:700"':'')+'><td>'+esc(f.name)+'</td><td class="n">'+d.count+'</td><td class="n">'+inrC(d.notional)+'</td><td class="n">'+inr(d.brokerage,2)+'</td><td class="n">'+inr(d.exchange+d.stt+d.stamp+d.sebi+d.ipft+d.gst,2)+'</td><td class="n">'+inr(d.dp,2)+'</td><td class="n">'+inr(d.mtfInterest,2)+'</td><td class="n">'+inr(d.borrowing,2)+'</td><td class="n"><b>'+inr(d.total,2)+'</b></td></tr>').join('')+'</tbody></table>';
@@ -1481,7 +1513,7 @@ function renderCharges(){
   $('#chargeRates').innerHTML='<table><thead><tr><th>Rate / assumption</th><th>Applied in estimate</th></tr></thead><tbody>'+
     '<tr><td>Equity delivery brokerage</td><td class="n">₹0</td></tr><tr><td>Equity intraday / MTF brokerage</td><td class="n">Lower of ₹20 or 0.03% per order</td></tr>'+
     '<tr><td>Equity NSE transaction fee</td><td class="n">0.0030699%</td></tr><tr><td>Equity delivery / MTF STT</td><td class="n">0.1% buy and sell</td></tr>'+
-    '<tr><td>DP sell charge</td><td class="n">₹12.50 per ISIN/instruction + GST, grouped by fund/date/symbol</td></tr><tr><td>Short-sale borrowing charge</td><td class="n">2% of short-sale notional, charged on each SHORT transaction (not on cover)</td></tr></tbody></table>';
+    '<tr><td>DP sell charge</td><td class="n">₹12.50 per ISIN/instruction + GST, grouped by fund/date/symbol</td></tr><tr><td>Short-sale borrowing charge</td><td class="n">2% per annum of short-sale notional, prorated by calendar days open; accrued through cover date or today</td></tr></tbody></table>';
 }
 function renderRebalance(){
   const T=totals();
