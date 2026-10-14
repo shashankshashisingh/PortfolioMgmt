@@ -1369,7 +1369,7 @@ const CHARGE_RATES={
   equity:{delivery:{brokerage:0,txn:.000030699,sttBuy:.001,sttSell:.001,stampBuy:.00015},intraday:{rate:.0003,cap:20,txn:.000030699,sttSell:.00025,stampBuy:.00003},mtf:{rate:.0003,cap:20,txn:.000030699,sttBuy:.001,sttSell:.001,stampBuy:.00015}},
   derivatives:{futures:{brokerage:20,txn:.0000173,sttSell:.0002,stampBuy:.00002},options:{brokerage:20,txn:.0003503,sttSell:.001,stampBuy:.00003}},
   commodity:{futures:{brokerage:20,sttSell:.0002,stampBuy:.00002},options:{brokerage:20,sttSell:.001,stampBuy:.00003}},
-  sebi:.000001,ipft:.000000001,gst:.18,dp:12.5
+  sebi:.000001,ipft:.000000001,gst:.18,dp:12.5,borrowing:.02
 };
 const PRODUCT_LABELS={AUTO:'Auto by asset class',EQ_DELIVERY:'Equity delivery',EQ_INTRADAY:'Equity intraday',EQ_MTF:'Equity MTF',EQ_FUTURES:'Equity futures',EQ_OPTIONS:'Equity options',COM_FUTURES:'Commodity futures',COM_OPTIONS:'Commodity options',OTHER:'Other / non-trading'};
 function chargeProduct(t){
@@ -1385,13 +1385,13 @@ function chargeProduct(t){
 }
 function chargeProductLabel(t){return PRODUCT_LABELS[chargeProduct(t)]||'Other'}
 function mtfRate(amount){return amount<=500000?.1249:amount<=1000000?.1349:amount<=2500000?.1449:.1549}
-function zeroChargeSummary(){return {brokerage:0,exchange:0,stt:0,stamp:0,sebi:0,ipft:0,gst:0,dp:0,mtfInterest:0,total:0,notional:0,count:0}}
+function zeroChargeSummary(){return {brokerage:0,exchange:0,stt:0,stamp:0,sebi:0,ipft:0,gst:0,dp:0,mtfInterest:0,borrowing:0,total:0,notional:0,count:0}}
 function calculateCharges(){
   const rows=[];
   for(const t of sortTxns(S.txns)){
     const product=chargeProduct(t),notional=Math.max(0,Number(t.qty)*Number(t.price)||0);
     const buy=['BUY','COVER'].includes(t.type),sell=['SELL','SHORT'].includes(t.type);
-    let brokerage=0,exchange=0,stt=0,stamp=0,sebi=notional*CHARGE_RATES.sebi,ipft=0,dp=0,mtfInterest=0,excluded='';
+    let brokerage=0,exchange=0,stt=0,stamp=0,sebi=notional*CHARGE_RATES.sebi,ipft=0,dp=0,mtfInterest=0,borrowing=t.type==='SHORT'?notional*CHARGE_RATES.borrowing:0,excluded='';
     if(['EQ_DELIVERY','EQ_INTRADAY','EQ_MTF'].includes(product)){
       const r=product==='EQ_DELIVERY'?CHARGE_RATES.equity.delivery:product==='EQ_INTRADAY'?CHARGE_RATES.equity.intraday:CHARGE_RATES.equity.mtf;
       brokerage=r.brokerage!=null?r.brokerage:Math.min(r.cap,notional*r.rate);
@@ -1407,7 +1407,7 @@ function calculateCharges(){
       excluded='Commodity exchange transaction levies omitted; exact contract/exchange rates not available';
     }else{sebi=0;excluded='No trading brokerage applied to this asset class'}
     const gst=(brokerage+exchange+sebi+ipft)*CHARGE_RATES.gst;
-    rows.push({t,product,notional,brokerage,exchange,stt,stamp,sebi,ipft,gst,dp,mtfInterest,total:brokerage+exchange+stt+stamp+sebi+ipft+gst+dp+mtfInterest,excluded});
+    rows.push({t,product,notional,brokerage,exchange,stt,stamp,sebi,ipft,gst,dp,mtfInterest,borrowing,total:brokerage+exchange+stt+stamp+sebi+ipft+gst+dp+mtfInterest+borrowing,excluded});
   }
   // Approximate DP debit once per fund/date/ISIN for delivery sells.
   const dpKeys=new Set();
@@ -1468,19 +1468,20 @@ function renderCharges(){
     '<div><div class="k">All funds total</div><div class="v">'+inrC(all.total)+'</div><div class="s muted">'+all.count+' recorded transactions</div></div>'+
     '<div><div class="k">Brokerage · '+(selected?'selected fund':'all funds')+'</div><div class="v">'+inrC(T.brokerage)+'</div><div class="s muted">tariff estimate</div></div>'+
     '<div><div class="k">Taxes + exchange</div><div class="v">'+inrC(T.exchange+T.stt+T.stamp+T.sebi+T.ipft+T.gst)+'</div><div class="s muted">including GST</div></div>'+
-    '<div><div class="k">DP + MTF interest</div><div class="v">'+inrC(T.dp+T.mtfInterest)+'</div><div class="s muted">interest is estimated</div></div>';
+    '<div><div class="k">DP + MTF interest</div><div class="v">'+inrC(T.dp+T.mtfInterest)+'</div><div class="s muted">interest is estimated</div></div>'+
+    '<div><div class="k">Borrowing charge</div><div class="v">'+inrC(T.borrowing)+'</div><div class="s muted">2% of short-sale notional</div></div>';
   const funds=S.funds.map(f=>({f,d:D.byFund[f.id]||zeroChargeSummary()}));funds.push({f:{id:'ALL',name:'Total — all funds'},d:all});
-  $('#chargeFundTable').innerHTML='<table><thead><tr><th>Fund</th><th class="n">Trades</th><th class="n">Notional</th><th class="n">Brokerage</th><th class="n">Taxes / exchange</th><th class="n">DP</th><th class="n">MTF interest</th><th class="n">Total charges</th></tr></thead><tbody>'+
+  $('#chargeFundTable').innerHTML='<table><thead><tr><th>Fund</th><th class="n">Trades</th><th class="n">Notional</th><th class="n">Brokerage</th><th class="n">Taxes / exchange</th><th class="n">DP</th><th class="n">MTF interest</th><th class="n">Borrowing charge</th><th class="n">Total charges</th></tr></thead><tbody>'+
     funds.map(({f,d})=>'<tr'+(f.id==='ALL'?' style="font-weight:700"':'')+'><td>'+esc(f.name)+'</td><td class="n">'+d.count+'</td><td class="n">'+inrC(d.notional)+'</td><td class="n">'+inr(d.brokerage,2)+'</td><td class="n">'+inr(d.exchange+d.stt+d.stamp+d.sebi+d.ipft+d.gst,2)+'</td><td class="n">'+inr(d.dp,2)+'</td><td class="n">'+inr(d.mtfInterest,2)+'</td><td class="n"><b>'+inr(d.total,2)+'</b></td></tr>').join('')+'</tbody></table>';
   const types=Object.entries(byType).sort((a,b)=>b[1].total-a[1].total);
-  $('#chargeTypeTable').innerHTML=types.length?'<table><thead><tr><th>Trade product</th><th class="n">Trades</th><th class="n">Brokerage</th><th class="n">Exchange</th><th class="n">STT</th><th class="n">Stamp duty</th><th class="n">SEBI/IPFT</th><th class="n">GST</th><th class="n">DP</th><th class="n">MTF interest</th><th class="n">Total</th></tr></thead><tbody>'+
+  $('#chargeTypeTable').innerHTML=types.length?'<table><thead><tr><th>Trade product</th><th class="n">Trades</th><th class="n">Brokerage</th><th class="n">Exchange</th><th class="n">STT</th><th class="n">Stamp duty</th><th class="n">SEBI/IPFT</th><th class="n">GST</th><th class="n">DP</th><th class="n">MTF interest</th><th class="n">Borrowing charge</th><th class="n">Total</th></tr></thead><tbody>'+
     types.map(([p,d])=>'<tr><td>'+esc(PRODUCT_LABELS[p]||p)+'</td><td class="n">'+d.count+'</td><td class="n">'+inr(d.brokerage,2)+'</td><td class="n">'+inr(d.exchange,2)+'</td><td class="n">'+inr(d.stt,2)+'</td><td class="n">'+inr(d.stamp,2)+'</td><td class="n">'+inr(d.sebi+d.ipft,2)+'</td><td class="n">'+inr(d.gst,2)+'</td><td class="n">'+inr(d.dp,2)+'</td><td class="n">'+inr(d.mtfInterest,2)+'</td><td class="n"><b>'+inr(d.total,2)+'</b></td></tr>').join('')+'</tbody></table>':'<div class="empty">No transactions for '+esc(label)+'.</div>';
-  $('#chargeTxnTable').innerHTML=rows.length?'<table><thead><tr><th>Date</th><th>Fund</th><th>Product</th><th>Side</th><th>Symbol</th><th class="n">Notional</th><th class="n">Brokerage</th><th class="n">Exchange</th><th class="n">STT</th><th class="n">Stamp</th><th class="n">SEBI/IPFT</th><th class="n">GST</th><th class="n">DP</th><th class="n">MTF interest</th><th class="n">Total</th></tr></thead><tbody>'+
+  $('#chargeTxnTable').innerHTML=rows.length?'<table><thead><tr><th>Date</th><th>Fund</th><th>Product</th><th>Side</th><th>Symbol</th><th class="n">Notional</th><th class="n">Brokerage</th><th class="n">Exchange</th><th class="n">STT</th><th class="n">Stamp</th><th class="n">SEBI/IPFT</th><th class="n">GST</th><th class="n">DP</th><th class="n">MTF interest</th><th class="n">Borrowing charge</th><th class="n">Total</th></tr></thead><tbody>'+
     rows.slice().reverse().map(r=>'<tr title="'+esc(r.excluded)+'"><td>'+esc(fmtD(r.t.date))+'</td><td>'+esc(fundName(r.t.fund))+'</td><td>'+esc(PRODUCT_LABELS[r.product])+'</td><td>'+esc(({BUY:'Buy',SELL:'Sell',SHORT:'Short sell',COVER:'Cover short'}[r.t.type]||r.t.type))+'</td><td>'+esc(r.t.symbol)+'</td><td class="n">'+inr(r.notional,2)+'</td><td class="n">'+inr(r.brokerage,2)+'</td><td class="n">'+inr(r.exchange,2)+'</td><td class="n">'+inr(r.stt,2)+'</td><td class="n">'+inr(r.stamp,2)+'</td><td class="n">'+inr(r.sebi+r.ipft,2)+'</td><td class="n">'+inr(r.gst,2)+'</td><td class="n">'+inr(r.dp,2)+'</td><td class="n">'+inr(r.mtfInterest,2)+'</td><td class="n"><b>'+inr(r.total,2)+'</b></td></tr>').join('')+'</tbody></table>':'<div class="empty">No transactions for '+esc(label)+'.</div>';
   $('#chargeRates').innerHTML='<table><thead><tr><th>Rate / assumption</th><th>Applied in estimate</th></tr></thead><tbody>'+
     '<tr><td>Equity delivery brokerage</td><td class="n">₹0</td></tr><tr><td>Equity intraday / MTF brokerage</td><td class="n">Lower of ₹20 or 0.03% per order</td></tr>'+
     '<tr><td>Equity NSE transaction fee</td><td class="n">0.0030699%</td></tr><tr><td>Equity delivery / MTF STT</td><td class="n">0.1% buy and sell</td></tr>'+
-    '<tr><td>DP sell charge</td><td class="n">₹12.50 per ISIN/instruction + GST, grouped by fund/date/symbol</td></tr></tbody></table>';
+    '<tr><td>DP sell charge</td><td class="n">₹12.50 per ISIN/instruction + GST, grouped by fund/date/symbol</td></tr><tr><td>Short-sale borrowing charge</td><td class="n">2% of short-sale notional, charged on each SHORT transaction (not on cover)</td></tr></tbody></table>';
 }
 function renderRebalance(){
   const T=totals();
