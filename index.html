@@ -1265,7 +1265,7 @@ function periodDataFor(A,b){
   // Measure performance from portfolio NAV (cash + signed market value), not
   // the signed value of positions alone. This prevents short positions and
   // changes in invested capital from creating misleading compounded returns.
-  const groups=S.view==='ALL'
+  const groups=(S.view==='ALL'&&A===C)
     ? S.funds.map(f=>({tx:A.txns.filter(t=>t.fund===f.id),corpus:Math.max(0,Number(f.totalAssets)||0)}))
     : [{tx:A.txns,corpus:Math.max(0,Number(S.funds.find(f=>f.id===(A.txns[0]&&A.txns[0].fund))?.totalAssets)||0)}];
   const assets=new Array(C.n).fill(0);
