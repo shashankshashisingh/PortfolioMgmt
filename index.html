@@ -1879,7 +1879,8 @@ $('#txnForm').addEventListener('submit',e=>{
   if(type==='BUY'&&shortHeld>1e-9){msg(M,'This symbol is currently short. Use Cover short to close it.','err');return}
   if(type==='SHORT'){
     const existingMargin=sum(Object.keys(book).map(k=>sum((book[k].shortLots||[]).map(l=>l.qty))*((marketPriceFor(k)||{}).price||price)*1.15));
-    const cashNow=(Number(fund&&fund.totalAssets)||0)-fundTx.reduce((acc,t)=>acc+(['BUY','COVER'].includes(t.type)?1:-1)*t.qty*t.price,0);
+    const fundConfig=S.funds.find(f=>f.id===fund);
+    const cashNow=(Number(fundConfig&&fundConfig.totalAssets)||0)-fundTx.reduce((acc,t)=>acc+(['BUY','COVER'].includes(t.type)?1:-1)*t.qty*t.price,0);
     const availableAfter=cashNow+qty*price-existingMargin-qty*price*1.15;
     if(availableAfter< -1e-9){msg(M,'Insufficient available cash for 115% short margin. Required for this trade: '+inr(qty*price*1.15)+'.','err');return}
   }
