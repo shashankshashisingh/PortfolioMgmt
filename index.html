@@ -1260,10 +1260,25 @@ function renderFunds(){
 }
 function benchEnd(b){return (b&&C.liveOn&&!(C.L&&C.L[b]!=null))?C.n-1:C.n}
 function periodDataFor(A,b){
-  const from=rangeFor(A),ps=A.ps;
-  const pr=[],br=[];
+  const from=rangeFor(A),pr=[],br=[];
   const bp=b?C.px[b]:null,end=benchEnd(b);
-  for(let i=from+1;i<end;i++){if(ps.ret[i]!=null&&bp){pr.push(ps.ret[i]);br.push(bp[i]/bp[i-1]-1)}else if(ps.ret[i]!=null){pr.push(ps.ret[i])}}
+  // Measure performance from portfolio NAV (cash + signed market value), not
+  // the signed value of positions alone. This prevents short positions and
+  // changes in invested capital from creating misleading compounded returns.
+  const groups=S.view==='ALL'
+    ? S.funds.map(f=>({tx:A.txns.filter(t=>t.fund===f.id),corpus:Math.max(0,Number(f.totalAssets)||0)}))
+    : [{tx:A.txns,corpus:Math.max(0,Number(S.funds.find(f=>f.id===(A.txns[0]&&A.txns[0].fund))?.totalAssets)||0)}];
+  const assets=new Array(C.n).fill(0);
+  for(const g of groups){
+    if(!g.tx.length) { for(let i=0;i<C.n;i++) assets[i]+=g.corpus; continue; }
+    const ga=analyze(g.tx,C.px,C.dates,C.n);
+    for(let i=0;i<C.n;i++) assets[i]+=g.corpus-(ga.ps.invested[i]||0)+(ga.ps.value[i]||0);
+  }
+  for(let i=from+1;i<end;i++){
+    if(assets[i-1]>0&&isFinite(assets[i])&&isFinite(assets[i-1]))pr.push(assets[i]/assets[i-1]-1);
+    else if(A.ps.ret[i]!=null)pr.push(A.ps.ret[i]);
+    if(bp&&bp[i-1]>0&&bp[i]!=null)br.push(bp[i]/bp[i-1]-1);
+  }
   return {from,pr,br:bp?br:null,b,bp};
 }
 function periodData(){return periodDataFor(C,benchSym())}
