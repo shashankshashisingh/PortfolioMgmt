@@ -1163,7 +1163,7 @@ function renderHoldings(){
     const val=sum(assetItems.map(p=>p.value)),cost=sum(assetItems.map(p=>p.cost)),day=sum(assetItems.map(p=>p.dayPnl)),un=sum(assetItems.map(p=>p.unreal)),w=sum(assetItems.map(p=>p.w));
     const dayPct=val-day>0?day/(val-day):0;
     body+='<tr class="grp"><td><button class="grpbtn" data-grp="'+esc(assetKey)+'" aria-expanded="'+assetOpen+'"><span aria-hidden="true">'+(assetOpen?'▾':'▸')+'</span><span class="swatch" style="background:'+clsColor(c)+';margin:0"></span>'+esc(c)+' <span class="cnt">'+assetItems.length+(assetItems.length===1?' holding':' holdings')+'</span></button></td>'+
-      '<td></td><td></td><td></td><td class="n '+sg(day)+'">'+pcS(dayPct)+'</td><td class="n '+sg(day)+'">'+inrS(day)+'</td><td class="n">'+inr(val)+'</td><td class="n '+sg(un)+'">'+inrS(un)+'</td><td class="n '+sg(un)+'">'+pcS(cost?val/cost-1:NaN)+'</td><td class="n">'+pc(w,1)+'</td><td></td></tr>';
+      '<td></td><td></td><td></td><td class="n '+sg(day)+'">'+pcS(dayPct)+'</td><td class="n '+sg(day)+'">'+inrS(day)+'</td><td class="n">'+inr(val)+'</td><td class="n '+sg(un)+'">'+inrS(un)+'</td><td class="n '+sg(un)+'">'+pcS(cost?un/cost:NaN)+'</td><td class="n">'+pc(w,1)+'</td><td></td></tr>';
     if(!assetOpen)continue;
     for(const side of [{key:'LONG',label:'Long positions',items:assetItems.filter(p=>p.side!=='SHORT')},{key:'SHORT',label:'Short positions',items:assetItems.filter(p=>p.side==='SHORT')}]){
       if(!side.items.length)continue;
