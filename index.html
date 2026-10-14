@@ -1207,7 +1207,7 @@ function fillSymbolLists(){
 function fundName(id){const f=S.funds.find(x=>x.id===id);return f?f.name:'—'}
 function renderFundbar(){
   const el=$('#fundbar');
-  const show=!['data','funds'].includes(activeTab)&&S.funds.length>1;
+  const show=['today','holdings','stats','bench','rebalance'].includes(activeTab)&&S.funds.length>1;
   el.hidden=!show;
   el.innerHTML='<span class="lbl">Fund</span><button class="chip" data-view="ALL" aria-pressed="'+(S.view==='ALL')+'">All funds</button>'+
     S.funds.map(f=>'<button class="chip" data-view="'+esc(f.id)+'" aria-pressed="'+(S.view===f.id)+'">'+esc(f.name)+'</button>').join('');
