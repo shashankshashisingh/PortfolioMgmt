@@ -1115,11 +1115,15 @@ function renderToday(){
   const T=totals(),h=C.held;
   if(!h.length){$('#kpis').innerHTML='';$('#valChart').innerHTML=emptyMsg();$('#allocBox').innerHTML=emptyMsg();$('#movers').innerHTML=emptyMsg();return}
   const totalRet=T.unreal+T.realised;
+  const chargeData=calculateCharges();
+  const relevantChargeRows=S.view==='ALL'?chargeData.rows:chargeData.rows.filter(r=>r.t.fund===S.view);
+  const totalCharges=relevantChargeRows.reduce((n,r)=>n+(r.total||0),0);
+  const netRet=totalRet-totalCharges;
   $('#kpis').innerHTML=
     '<div><div class="k">Current value</div><div class="v big">'+inrC(T.value)+'</div><div class="s muted">'+inr(T.value)+'</div></div>'+
     '<div><div class="k">Today</div><div class="v '+sg(T.dayPnl)+'">'+inrS(T.dayPnl)+'</div><div class="s '+sg(T.dayPnl)+'">'+pcS(T.dayPct)+'</div></div>'+
-    '<div><div class="k">Total profit</div><div class="v '+sg(totalRet)+'">'+inrS(totalRet)+'</div><div class="s muted">Unrealised '+inrS(T.unreal)+' · Realised '+inrS(T.realised)+'</div></div>'+
-    '<div><div class="k">XIRR</div><div class="v '+sg(T.xirr)+'">'+pcS(T.xirr,1)+'</div><div class="s muted">annualised, cash-flow weighted</div></div>';
+    '<div><div class="k">Total profit · after charges</div><div class="v '+sg(netRet)+'">'+inrS(netRet)+'</div><div class="s muted">Before charges: '+inrS(totalRet)+' · Est. charges: '+inrS(totalCharges)+'</div><div class="s muted">Unrealised '+inrS(T.unreal)+' · Realised '+inrS(T.realised)+' (before charges)</div></div>'+
+    '<div><div class="k">XIRR</div><div class="v '+sg(T.xirr)+'">'+pcS(T.xirr,1)+'</div><div class="s muted">annualised, cash-flow weighted; before charges</div></div>';
   const from=range(),ps=C.ps,d=slice(C.dates,from);
   $('#valHint').textContent=d.length?fmtD(d[0])+' to '+fmtD(d[d.length-1]):'';
   lineChart($('#valChart'),d,[
