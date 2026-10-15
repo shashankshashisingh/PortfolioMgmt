@@ -553,7 +553,7 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
     <div class="grid2">
       <div class="panel">
         <h2>Market data source</h2>
-        <p class="note" style="margin:0 0 10px">NSE CM Bhavcopy is the primary source for equity closing prices and symbol names. Prices refresh when the scheduled GitHub Action publishes a new Bhavcopy; they are end-of-day closes, not intraday live quotes.</p>
+        <p class="note" style="margin:0 0 10px">NSE CM Bhavcopy is saved daily by a scheduled GitHub Action and remains the source for end-of-day closes, price history, the symbol list and the downloadable archive. When you are signed in and NSE is open, live prices for your NSE holdings and fund benchmarks come from Fyers and take priority; if Fyers is unavailable the latest Bhavcopy close is used.</p>
         <div class="msg" id="feedMsg">Prices are loaded from data/prices.json.</div>
       </div>
       <div class="panel">
@@ -857,6 +857,10 @@ function buildDemo(){
 /* ---------- state ---------- */
 let S=null,DEMO_AUX=null;
 const FEED={meta:{},updated:'',dir:{},hist:null,raw:null};
+// Live quotes from Fyers (via the fyers-quotes Edge Function). Bhavcopy stays the end-of-day source and the fallback.
+const FYERS={q:{},at:0,status:'idle',err:'',unresolved:[],busy:false,count:0};
+const FYERS_FRESH_MS=90000;
+function fyersFresh(sym){const q=FYERS.q[sym];return !!q&&Date.now()-q.at<FYERS_FRESH_MS}
 const REPO={env:'',priceCount:0,priceUpdated:'',priceErr:'',priceErrors:{},dirCount:0,dirErr:'',histCount:0,histUpdated:'',histErr:''};
 const PAGES_URL='https://shashankshashisingh.github.io/PortfolioMgmt/';
 function blank(){return {mode:'user',ver:2,txns:[],meta:{},series:{},manual:{},live:{},bench:'',rf:7,targets:{},feedUrl:'',period:'1Y',sort:{k:'value',dir:-1},nextId:1,funds:[{id:'f1',name:'Main',bench:'',totalAssets:0}],view:'ALL'}}
@@ -1061,8 +1065,9 @@ function range(){return rangeFor(C)}
 function renderStatus(){
   const ist=C.ist||istNow();
   const state=ist.open?'Market open':ist.preopen?'Pre-open':'Market closed';
-  const feed=FEED.raw?.source|| (S.mode==='demo'?(FEED.updated?'NSE Bhavcopy + simulated fallback':'Simulated prices'):S.feedUrl?'NSE Bhavcopy':'Manual and imported prices');
-  const upd=FEED.updated?' · data updated '+new Date(FEED.updated).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'}):'';
+  const fyersOn=FYERS.status==='live'&&Date.now()-FYERS.at<FYERS_FRESH_MS;
+  const feed=fyersOn?'Fyers live prices':FEED.raw?.source|| (S.mode==='demo'?(FEED.updated?'NSE Bhavcopy + simulated fallback':'Simulated prices'):S.feedUrl?'NSE Bhavcopy':'Manual and imported prices');
+  const upd=fyersOn?' · quoted '+new Date(FYERS.at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Kolkata'}):FEED.updated?' · data updated '+new Date(FEED.updated).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'}):'';
   $('#status').innerHTML='<span class="pill"><span class="dot '+(ist.open?'open':'')+'"></span>NSE '+state+'</span><span class="pill">'+esc(feed+upd)+'</span><span class="mono">'+ist.stamp+' IST</span>';
 }
 function renderBanner(){
@@ -1703,7 +1708,9 @@ async function pollFeed(show){
           S.series[K]={d:[day],c:[Number(p)]};
           if(!S.meta[K])S.meta[K]={name:FEED.meta[K]?.name||K,cls:'Equities',sector:FEED.meta[K]?.sector||''};
         }
-        S.live[K]=Number(p);n++;
+        // A fresh Fyers quote outranks the end-of-day Bhavcopy close.
+        if(!fyersFresh(K))S.live[K]=Number(p);
+        n++;
       }
     }
     if(j0&&j0.updated)FEED.updated=j0.updated;
@@ -1717,7 +1724,56 @@ async function pollFeed(show){
 function startFeed(){
   clearInterval(feedTimer);
   if((S.mode==='user'||S.mode==='demo')&&S.feedUrl){pollFeed(false);feedTimer=setInterval(()=>pollFeed(false),30000)}
+  setTimeout(()=>pollFyers(false),2000);
 }
+
+/* ---------- live prices from Fyers (signed-in users, market hours) ---------- */
+function isNseListed(s){return !!((FEED.raw&&FEED.raw.prices&&FEED.raw.prices[s])||FEED.dir[s])}
+function fyersTargets(){
+  const book=processTxns(S.txns),symbols=[];
+  for(const s in book){
+    const q=sum(book[s].lots.map(l=>l.qty))-sum((book[s].shortLots||[]).map(l=>l.qty));
+    if(Math.abs(q)>1e-9&&isNseListed(s))symbols.push(s);
+  }
+  const indices=[...new Set([S.bench,...S.funds.map(f=>f.bench)].filter(Boolean))];
+  return {symbols:symbols.slice(0,80),indices:indices.slice(0,20)};
+}
+// Quotes are polled from just before the open until shortly after the close (IST), so the last tick is captured.
+function fyersWindow(ist){return ist.trading&&ist.mins>=550&&ist.mins<=945}
+async function pollFyers(force){
+  if(FYERS.busy||!cloudClient||!cloudUser||S.mode!=='user')return;
+  const ist=istNow();
+  if(!force&&!fyersWindow(ist)){if(FYERS.status==='live')FYERS.status='closed';return}
+  const body=fyersTargets();
+  if(!body.symbols.length&&!body.indices.length){FYERS.status='idle';return}
+  FYERS.busy=true;
+  try{
+    const {data,error}=await cloudClient.functions.invoke('fyers-quotes',{body});
+    if(error){
+      let detail=null;
+      try{detail=error.context&&typeof error.context.json==='function'?await error.context.json():null}catch(_){}
+      if(detail&&detail.error==='fyers_reauth_required'){FYERS.status='reauth';FYERS.err='Fyers login has expired. Run scripts/fyers-login.mjs again.'}
+      else{FYERS.status='error';FYERS.err=(detail&&detail.message)||error.message||'request failed'}
+      return;
+    }
+    const now=Date.now();let n=0;
+    for(const K in (data&&data.quotes)||{}){
+      const q=data.quotes[K];
+      if(!q||!isFinite(q.ltp)||!(q.ltp>0))continue;
+      FYERS.q[K]={ltp:Number(q.ltp),prevClose:q.prevClose,changePct:q.changePct,at:now};
+      S.live[K]=Number(q.ltp);n++;
+    }
+    FYERS.unresolved=(data&&data.unresolved)||[];
+    FYERS.count=n;FYERS.at=now;FYERS.status=n?'live':'error';FYERS.err=n?'':'Fyers returned no prices for your symbols.';
+    if(n){compute();renderStatus();if(activeTab==='data')renderRepoStatus()}
+  }catch(e){
+    FYERS.status='error';FYERS.err=e&&e.message?e.message:'request failed';
+  }finally{
+    FYERS.busy=false;
+    if(activeTab==='data')renderRepoStatus();
+  }
+}
+setInterval(()=>pollFyers(false),15000);
 
 /* ---------- events ---------- */
 function msg(el,text,kind){el.className='msg '+(kind||'');el.textContent=text}
@@ -1878,6 +1934,16 @@ function ago(iso){
   if(!isFinite(m))return '';
   return m<1?'just now':m<60?m+' min ago':m<1440?Math.round(m/60)+' h ago':Math.round(m/1440)+' days ago';
 }
+function fyersLine(line){
+  const label='Fyers live prices';
+  if(S.mode!=='user'||!cloudUser)return line(false,label,'available after you sign in to your account and hold NSE symbols. Until then prices are the latest Bhavcopy close.');
+  const unres=FYERS.unresolved.length?' No Fyers quote for '+FYERS.unresolved.slice(0,6).map(esc).join(', ')+(FYERS.unresolved.length>6?'…':'')+' (these keep the Bhavcopy close).':'';
+  if(FYERS.status==='live')return line(true,label,FYERS.count+' quotes, last '+ago(new Date(FYERS.at).toISOString())+'. Refreshes every 15 s while NSE is open.'+unres);
+  if(FYERS.status==='reauth')return line(false,label,esc(FYERS.err));
+  if(FYERS.status==='error')return line(false,label,'unavailable ('+esc(FYERS.err)+'). Showing the latest Bhavcopy close.');
+  if(FYERS.status==='closed')return line(true,label,'market closed; showing the latest quote and Bhavcopy close.'+unres);
+  return line(false,label,'not polled yet. Quotes are requested while NSE is open (09:10 to 15:45 IST on weekdays).');
+}
 function renderRepoStatus(){
   const el=$('#repoStatus');if(!el)return;
   const line=(ok,label,text)=>'<div class="row" style="grid-template-columns:auto 1fr"><span class="'+(ok?'gain':'loss')+'" aria-hidden="true">'+(ok?'●':'○')+'</span><span><b>'+label+'</b> <span class="muted">'+text+'</span></span></div>';
@@ -1894,6 +1960,7 @@ function renderRepoStatus(){
   const pOk=REPO.priceCount>0&&!!REPO.priceUpdated;
   el.innerHTML=
     line(pOk,'NSE Bhavcopy prices',pOk?REPO.priceCount+' symbols, updated '+ago(REPO.priceUpdated)+'. End-of-day close, not an intraday live feed.':(REPO.priceErr?'could not read data/prices.json ('+esc(REPO.priceErr)+')':'data/prices.json is empty. In your repo, open Actions and run "Update NSE Bhavcopy".'))+
+    fyersLine(line)+
     line(REPO.dirCount>0,'Symbol list',REPO.dirCount>0?REPO.dirCount.toLocaleString('en-IN')+' symbols for lookup':(REPO.dirErr?'could not read data/directory.json ('+esc(REPO.dirErr)+')':'not built yet. It is created by the "Update NSE Bhavcopy" run.'))+
     line(REPO.histCount>0,'Price history',REPO.histCount>0?REPO.histCount+' series, updated '+ago(REPO.histUpdated):(REPO.histErr?'could not read data/history.json ('+esc(REPO.histErr)+')':'empty. Run "Update NSE Bhavcopy" in Actions to append closing prices; historical data feeds statistics and benchmark tabs.'))+
     (bulkBlocked?'<p class="note">NSE refuses the bulk quote call from GitHub, so live prices come one symbol at a time and only for symbols listed in <span class="mono">symbols.json</span>. Today\'s benchmark level is also missing, so benchmark statistics stop at the last close.</p>':'')+
@@ -1902,6 +1969,7 @@ function renderRepoStatus(){
     ((!pOk||!REPO.dirCount)?'<p class="note">If a job shows a red cross in Actions, NSE is probably blocking GitHub\'s servers. The job log has the reason.</p>':'');
 }
 function marketPriceFor(sym){
+  if(fyersFresh(sym))return {price:FYERS.q[sym].ltp,source:'Fyers live price'};
   const feed=FEED.raw&&FEED.raw.prices&&FEED.raw.prices[sym];
   if(feed&&Number.isFinite(Number(feed.ltp))&&Number(feed.ltp)>0)return {price:Number(feed.ltp),source:'NSE Bhavcopy close'};
   if(Number.isFinite(Number(S.manual[sym]))&&Number(S.manual[sym])>0)return {price:Number(S.manual[sym]),source:'manual current price'};
