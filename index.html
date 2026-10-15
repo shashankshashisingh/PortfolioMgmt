@@ -553,7 +553,7 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
     <div class="grid2">
       <div class="panel">
         <h2>Market data source</h2>
-        <p class="note" style="margin:0 0 10px">NSE CM Bhavcopy is saved daily by a scheduled GitHub Action and remains the source for end-of-day closes, price history, the symbol list and the downloadable archive. When you are signed in and NSE is open, live prices for your NSE holdings and fund benchmarks come from Fyers and take priority; if Fyers is unavailable the latest Bhavcopy close is used.</p>
+        <p class="note" style="margin:0 0 10px">Fyers is the primary source for current prices and last traded prices, including when NSE is closed. Quotes refresh every 15 seconds during market hours and about every 5 minutes outside market hours. NSE Bhavcopy is used for historical price data, the symbol directory and the downloadable archive only; it does not override current valuations.</p>
         <div class="msg" id="feedMsg">Prices are loaded from data/prices.json.</div>
       </div>
       <div class="panel">
@@ -857,10 +857,10 @@ function buildDemo(){
 /* ---------- state ---------- */
 let S=null,DEMO_AUX=null;
 const FEED={meta:{},updated:'',dir:{},hist:null,raw:null};
-// Live quotes from Fyers (via the fyers-quotes Edge Function). Bhavcopy stays the end-of-day source and the fallback.
-const FYERS={q:{},at:0,status:'idle',err:'',unresolved:[],busy:false,count:0};
+// Fyers is the primary source for current prices, including the last traded price when the market is closed. Bhavcopy is used for historical price series and symbol/archive data.
+const FYERS={q:{},at:0,lastAttemptAt:0,status:'idle',err:'',unresolved:[],busy:false,count:0};
 const FYERS_FRESH_MS=90000;
-function fyersFresh(sym){const q=FYERS.q[sym];return !!q&&Date.now()-q.at<FYERS_FRESH_MS}
+function fyersFresh(sym){const q=FYERS.q[sym];return !!q&&(!fyersWindow(istNow())||Date.now()-q.at<FYERS_FRESH_MS)}
 const REPO={env:'',priceCount:0,priceUpdated:'',priceErr:'',priceErrors:{},dirCount:0,dirErr:'',histCount:0,histUpdated:'',histErr:''};
 const PAGES_URL='https://shashankshashisingh.github.io/PortfolioMgmt/';
 function blank(){return {mode:'user',ver:2,txns:[],meta:{},series:{},manual:{},live:{},bench:'',rf:7,targets:{},feedUrl:'',period:'1Y',sort:{k:'value',dir:-1},nextId:1,funds:[{id:'f1',name:'Main',bench:'',totalAssets:0}],view:'ALL'}}
@@ -918,8 +918,6 @@ function simTick(){
   if(!Object.keys(S.live).length){initSim();return}
   const m=.00035*gauss(Math.random);
   for(const s in S.live){
-    // Keep real repository quotes stable; only simulate symbols without a fetched quote.
-    if(FEED.raw?.prices?.[s])continue;
     const fixed=DEMO_AUX.fixed[s];
     if(fixed)continue;
     const b=DEMO_AUX.beta[s]||0,id=DEMO_AUX.idio[s]||0;
@@ -1697,20 +1695,22 @@ async function pollFeed(show){
     if(!res.ok)throw new Error('HTTP '+res.status);
     const j0=await res.json();
     const j=j0&&j0.prices&&typeof j0.prices==='object'?j0.prices:j0;
+    const isBhavcopySnapshot=S.feedUrl==='data/prices.json';
     let n=0;
     for(const s in j){
       const v=j[s],p=typeof v==='number'?v:(v&&(v.ltp!=null?v.ltp:v.price)),K=s.toUpperCase();
       if(v&&typeof v==='object'&&(v.name||v.sector))FEED.meta[K]={name:v.name||'',sector:v.sector||''};
       if(isFinite(p)&&Number(p)>0){
-        // A live quote must still work when this symbol has no historical series yet.
-        // Seed a one-point series so the dashboard can value a newly added holding.
-        if(!S.series[K]){
-          const day=istNow().date;
-          S.series[K]={d:[day],c:[Number(p)]};
-          if(!S.meta[K])S.meta[K]={name:FEED.meta[K]?.name||K,cls:'Equities',sector:FEED.meta[K]?.sector||''};
+        // The repository's Bhavcopy snapshot is for historical/archive purposes only; it must not set current valuation prices.
+        // Custom user feeds may still provide current prices and seed a new symbol's initial series.
+        if(!isBhavcopySnapshot){
+          if(!S.series[K]){
+            const day=istNow().date;
+            S.series[K]={d:[day],c:[Number(p)]};
+            if(!S.meta[K])S.meta[K]={name:FEED.meta[K]?.name||K,cls:'Equities',sector:FEED.meta[K]?.sector||''};
+          }
+          if(!fyersFresh(K))S.live[K]=Number(p);
         }
-        // A fresh Fyers quote outranks the end-of-day Bhavcopy close.
-        if(!fyersFresh(K))S.live[K]=Number(p);
         n++;
       }
     }
@@ -1739,15 +1739,16 @@ function fyersTargets(){
   const indices=[...new Set([S.bench,...S.funds.map(f=>f.bench)].filter(Boolean))];
   return {symbols:symbols.slice(0,80),indices:indices.slice(0,20)};
 }
-// Quotes are polled from just before the open until shortly after the close (IST), so the last tick is captured.
+// Fyers quotes are requested during market hours and periodically outside market hours so its last traded price is available after the close too.
 function fyersWindow(ist){return ist.trading&&ist.mins>=550&&ist.mins<=945}
 async function pollFyers(force){
   if(FYERS.busy||!cloudClient||!cloudUser||S.mode!=='user')return;
   const ist=istNow();
-  if(!force&&!fyersWindow(ist)){if(FYERS.status==='live')FYERS.status='closed';return}
+  if(!force&&!fyersWindow(ist)&&FYERS.lastAttemptAt&&Date.now()-FYERS.lastAttemptAt<5*60*1000)return;
   const body=fyersTargets();
   if(!body.symbols.length&&!body.indices.length){FYERS.status='idle';return}
   FYERS.busy=true;
+  FYERS.lastAttemptAt=Date.now();
   try{
     const {data,error}=await cloudClient.functions.invoke('fyers-quotes',{body});
     if(error){
@@ -1761,7 +1762,7 @@ async function pollFyers(force){
     for(const K in (data&&data.quotes)||{}){
       const q=data.quotes[K];
       if(!q||!isFinite(q.ltp)||!(q.ltp>0))continue;
-      FYERS.q[K]={ltp:Number(q.ltp),prevClose:q.prevClose,changePct:q.changePct,at:now};
+      FYERS.q[K]={ltp:Number(q.ltp),prevClose:q.prevClose,changePct:q.changePct,ts:q.ts||null,at:now};
       S.live[K]=Number(q.ltp);n++;
     }
     FYERS.unresolved=(data&&data.unresolved)||[];
@@ -1939,11 +1940,11 @@ function fyersLine(line){
   const label='Fyers live prices';
   if(S.mode!=='user'||!cloudUser)return line(false,label,'available after you sign in to your account and hold NSE symbols. Until then prices are the latest Bhavcopy close.');
   const unres=FYERS.unresolved.length?' No Fyers quote for '+FYERS.unresolved.slice(0,6).map(esc).join(', ')+(FYERS.unresolved.length>6?'…':'')+' (these keep the Bhavcopy close).':'';
-  if(FYERS.status==='live')return line(true,label,FYERS.count+' quotes, last '+ago(new Date(FYERS.at).toISOString())+'. Refreshes every 15 s while NSE is open.'+unres);
+  if(FYERS.status==='live')return line(true,label,FYERS.count+' quotes, last fetched '+ago(new Date(FYERS.at).toISOString())+'. Refreshes every 15 s during market hours and about every 5 min while closed.'+unres);
   if(FYERS.status==='reauth')return line(false,label,esc(FYERS.err));
-  if(FYERS.status==='error')return line(false,label,'unavailable ('+esc(FYERS.err)+'). Showing the latest Bhavcopy close.');
-  if(FYERS.status==='closed')return line(true,label,'market closed; showing the latest quote and Bhavcopy close.'+unres);
-  return line(false,label,'not polled yet. Quotes are requested while NSE is open (09:10 to 15:45 IST on weekdays).');
+  if(FYERS.status==='error')return line(false,label,'unavailable ('+esc(FYERS.err)+'). No Bhavcopy price is substituted for the current quote.');
+  if(FYERS.status==='closed')return line(true,label,'market closed; using the last Fyers quote when available.'+unres);
+  return line(false,label,'not polled yet. Fyers is queried during market hours and periodically while the market is closed.');
 }
 function renderRepoStatus(){
   const el=$('#repoStatus');if(!el)return;
@@ -1960,7 +1961,7 @@ function renderRepoStatus(){
   const noFeed=S.mode==='user'&&FEED.raw&&FEED.raw.prices?heldSyms.filter(s=>!FEED.raw.prices[s]):[];
   const pOk=REPO.priceCount>0&&!!REPO.priceUpdated;
   el.innerHTML=
-    line(pOk,'NSE Bhavcopy prices',pOk?REPO.priceCount+' symbols, updated '+ago(REPO.priceUpdated)+'. End-of-day close, not an intraday live feed.':(REPO.priceErr?'could not read data/prices.json ('+esc(REPO.priceErr)+')':'data/prices.json is empty. In your repo, open Actions and run "Update NSE Bhavcopy".'))+
+    line(pOk,'Bhavcopy snapshot / archive',pOk?REPO.priceCount+' symbols, updated '+ago(REPO.priceUpdated)+'. Historical/reference data only; not used as the current quote.':(REPO.priceErr?'could not read data/prices.json ('+esc(REPO.priceErr)+')':'data/prices.json is empty. In your repo, open Actions and run "Update NSE Bhavcopy".'))+
     fyersLine(line)+
     line(REPO.dirCount>0,'Symbol list',REPO.dirCount>0?REPO.dirCount.toLocaleString('en-IN')+' symbols for lookup':(REPO.dirErr?'could not read data/directory.json ('+esc(REPO.dirErr)+')':'not built yet. It is created by the "Update NSE Bhavcopy" run.'))+
     line(REPO.histCount>0,'Price history',REPO.histCount>0?REPO.histCount+' series, updated '+ago(REPO.histUpdated):(REPO.histErr?'could not read data/history.json ('+esc(REPO.histErr)+')':'empty. Run "Update NSE Bhavcopy" in Actions to append closing prices; historical data feeds statistics and benchmark tabs.'))+
@@ -1970,9 +1971,7 @@ function renderRepoStatus(){
     ((!pOk||!REPO.dirCount)?'<p class="note">If a job shows a red cross in Actions, NSE is probably blocking GitHub\'s servers. The job log has the reason.</p>':'');
 }
 function marketPriceFor(sym){
-  if(fyersFresh(sym))return {price:FYERS.q[sym].ltp,source:'Fyers live price'};
-  const feed=FEED.raw&&FEED.raw.prices&&FEED.raw.prices[sym];
-  if(feed&&Number.isFinite(Number(feed.ltp))&&Number(feed.ltp)>0)return {price:Number(feed.ltp),source:'NSE Bhavcopy close'};
+  if(fyersFresh(sym))return {price:FYERS.q[sym].ltp,source:'Fyers last traded price'};
   if(Number.isFinite(Number(S.manual[sym]))&&Number(S.manual[sym])>0)return {price:Number(S.manual[sym]),source:'manual current price'};
   if(Number.isFinite(Number(S.live[sym]))&&Number(S.live[sym])>0)return {price:Number(S.live[sym]),source:'available live price'};
   const series=S.series[sym];
