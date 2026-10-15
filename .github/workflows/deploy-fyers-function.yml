@@ -33,9 +33,11 @@ jobs:
             echo "::error::Add the SUPABASE_ACCESS_TOKEN repository secret (Settings > Secrets and variables > Actions)."
             exit 1
           fi
-      - uses: supabase/setup-cli@v1
+      # The CLI comes from npm rather than supabase/setup-cli, which looks up "latest" through the GitHub API
+      # and fails on shared runners when that API is rate limited.
+      - uses: actions/setup-node@v4
         with:
-          version: latest
+          node-version: 22
       # JWT verification stays on (the default), so only signed-in users can call the function.
       - name: Deploy fyers-quotes
-        run: supabase functions deploy fyers-quotes --project-ref "$PROJECT_REF"
+        run: npx --yes supabase@latest functions deploy fyers-quotes --project-ref "$PROJECT_REF"
