@@ -1752,7 +1752,7 @@ async function pollFyers(force){
     if(error){
       let detail=null;
       try{detail=error.context&&typeof error.context.json==='function'?await error.context.json():null}catch(_){}
-      if(detail&&detail.error==='fyers_reauth_required'){FYERS.status='reauth';FYERS.err='Fyers login has expired. Run scripts/fyers-login.mjs again.'}
+      if(detail&&detail.error==='fyers_reauth_required'){FYERS.status='reauth';FYERS.err='Fyers login is missing or has expired. In GitHub, open Actions and run the "Fyers login" workflow (steps are in FYERS_SETUP.md).'}
       else{FYERS.status='error';FYERS.err=(detail&&detail.message)||error.message||'request failed'}
       return;
     }
