@@ -90,7 +90,8 @@ if (supaUrl && serviceKey) {
     method: 'POST',
     headers: {
       apikey: serviceKey,
-      Authorization: `Bearer ${serviceKey}`,
+      // New-style sb_secret_ keys are not JWTs and go in the apikey header only; legacy service_role keys are JWTs.
+      ...(serviceKey.startsWith('sb_secret_') ? {} : { Authorization: `Bearer ${serviceKey}` }),
       'Content-Type': 'application/json',
       Prefer: 'resolution=merge-duplicates,return=minimal',
     },

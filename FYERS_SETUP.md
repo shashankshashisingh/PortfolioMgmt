@@ -19,7 +19,7 @@ Everything below can be done from the Supabase dashboard and the GitHub website.
    - `SUPABASE_ACCESS_TOKEN`: create at <https://supabase.com/dashboard/account/tokens>
    - `FYERS_APP_ID` and `FYERS_SECRET_ID`: same values as step 2
    - `SUPABASE_URL`: your project URL, `https://uworsbrulgoylwvxxadh.supabase.co`
-   - `SUPABASE_SERVICE_ROLE_KEY`: Supabase dashboard, Project Settings, API Keys, the `service_role` key (never the publishable key, and never put it in a file)
+   - `SUPABASE_SERVICE_ROLE_KEY`: Supabase dashboard, Project Settings, API Keys: either the `service_role` key (Legacy API keys tab) or a `sb_secret_...` secret key. Never the publishable key, and never put it in a file
    - If your Fyers app uses a custom redirect URL, add it as a repository *variable* named `FYERS_REDIRECT_URI`.
 4. **Merge the pull request to `main`**, then open the Actions tab and run **Deploy Fyers quotes function** (it also runs automatically on later changes to the function).
 5. **Log in to Fyers.** Open this URL in your browser, replacing `YOUR_APP_ID` (and the redirect if you use a custom one), and approve the app:
