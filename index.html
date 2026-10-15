@@ -428,7 +428,7 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
           <button class="btn" type="submit">Add</button>
         </form>
         <div class="msg" id="txnMsg"></div>
-        <p class="note">Enter the exchange ticker (for example, RELIANCE or INFY) in Symbol / ticker; the company name, asset class and sector can be filled from the local NSE symbol directory. Use Look up symbol if it is not in the directory. Check the details before saving. Futures and options are valued as quantity times price. Short sales reserve margin equal to 115% of current short notional; use Cover short to close a short position. Prices are resolved from the latest available NSE Bhavcopy close or another available price.</p>
+        <p class="note">Enter the exchange ticker (for example, RELIANCE or INFY) in Symbol / ticker; the company name, asset class and sector can be filled from the local NSE symbol directory. Use Look up symbol if it is not in the directory. Check the details before saving. Futures and options are valued as quantity times price. Short sales reserve margin equal to 115% of current short notional; use Cover short to close a short position. Prices use the latest Fyers last traded price where available; Bhavcopy is reserved for historical price data.</p>
       </div>
     </details>
     <details id="priceBox">
@@ -1736,8 +1736,10 @@ function fyersTargets(){
     const q=sum(book[s].lots.map(l=>l.qty))-sum((book[s].shortLots||[]).map(l=>l.qty));
     if(Math.abs(q)>1e-9&&isNseListed(s))symbols.push(s);
   }
+  const entrySym=$('#fSym')?.value.trim().toUpperCase();
+  if(entrySym&&isNseListed(entrySym))symbols.push(entrySym);
   const indices=[...new Set([S.bench,...S.funds.map(f=>f.bench)].filter(Boolean))];
-  return {symbols:symbols.slice(0,80),indices:indices.slice(0,20)};
+  return {symbols:[...new Set(symbols)].slice(0,80),indices:indices.slice(0,20)};
 }
 // Fyers quotes are requested during market hours and periodically outside market hours so its last traded price is available after the close too.
 function fyersWindow(ist){return ist.trading&&ist.mins>=550&&ist.mins<=945}
@@ -1938,8 +1940,8 @@ function ago(iso){
 }
 function fyersLine(line){
   const label='Fyers live prices';
-  if(S.mode!=='user'||!cloudUser)return line(false,label,'available after you sign in to your account and hold NSE symbols. Until then prices are the latest Bhavcopy close.');
-  const unres=FYERS.unresolved.length?' No Fyers quote for '+FYERS.unresolved.slice(0,6).map(esc).join(', ')+(FYERS.unresolved.length>6?'…':'')+' (these keep the Bhavcopy close).':'';
+  if(S.mode!=='user'||!cloudUser)return line(false,label,'available after you sign in to your account and hold NSE symbols. Without a Fyers quote, the app may only have a historical close or a manually entered price.');
+  const unres=FYERS.unresolved.length?' No Fyers quote for '+FYERS.unresolved.slice(0,6).map(esc).join(', ')+(FYERS.unresolved.length>6?'…':'')+' (no current Fyers quote is available for these symbols).':'';
   if(FYERS.status==='live')return line(true,label,FYERS.count+' quotes, last fetched '+ago(new Date(FYERS.at).toISOString())+'. Refreshes every 15 s during market hours and about every 5 min while closed.'+unres);
   if(FYERS.status==='reauth')return line(false,label,esc(FYERS.err));
   if(FYERS.status==='error')return line(false,label,'unavailable ('+esc(FYERS.err)+'). No Bhavcopy price is substituted for the current quote.');
