@@ -1,13 +1,13 @@
 # Fyers live prices setup
 
-Live prices come from Fyers through a Supabase Edge Function (`supabase/functions/fyers-quotes`). NSE Bhavcopy is unchanged: it is still saved daily by GitHub Actions and still provides end-of-day closes, price history, the symbol list and the archive. Fyers only adds live quotes while NSE is open and falls back to Bhavcopy whenever it is unavailable.
+Current prices and last traded prices come from Fyers through a Supabase Edge Function (`supabase/functions/fyers-quotes`), even when NSE is closed. NSE Bhavcopy is saved daily by GitHub Actions for historical price series, the symbol directory and the downloadable archive only; its snapshot is not used to override current valuations.
 
 Your Fyers app secret, PIN and tokens never reach the browser. The function only answers requests from signed-in users.
 
 ## How it behaves
-- Polls every 15 seconds, weekdays from 09:10 to 15:45 IST, only for signed-in users.
+- Polls every 15 seconds during NSE market hours and about every 5 minutes outside market hours, only for signed-in users. This lets the app fetch Fyers' last traded price after the market closes and when the site is first opened outside market hours.
 - Quotes your open NSE positions and the benchmarks chosen for your funds. Mutual funds, FDs and other symbols without an NSE listing keep their existing prices.
-- A fresh Fyers quote (under 90 seconds old) wins over the Bhavcopy close. The Data tab shows whether Fyers is live, expired or unavailable.
+- During market hours, a Fyers quote less than 90 seconds old is considered fresh. Outside market hours, the most recently fetched Fyers quote remains the current-price source until another Fyers quote replaces it. Bhavcopy is not used as a current-price fallback; if Fyers is unavailable, the app may show a last available historical close where no current quote exists.
 - Equities are requested as `NSE:SYMBOL-EQ`, retried as `-BE`. Benchmarks use the index symbols in `INDEX_MAP` inside `supabase/functions/fyers-quotes/lib.js`. If a benchmark shows "No Fyers quote" on the Data tab, correct its entry there against Fyers' symbol master and redeploy.
 
 ## Setup without a terminal (browser and GitHub only)
@@ -47,7 +47,7 @@ Everything below can be done from the Supabase dashboard and the GitHub website.
    Open the printed URL, log in, paste the URL you are redirected to, then run the SQL it prints in the Supabase SQL Editor.
 
 ## Keeping it running
-The function renews the daily access token itself using the refresh token and your PIN. Fyers refresh tokens last about 15 days, so repeat step 5 roughly every two weeks. When it lapses (or before the first login), the Data tab says "Fyers login is missing or has expired" and prices fall back to Bhavcopy until you do.
+The function renews the daily access token itself using the refresh token and your PIN. Fyers refresh tokens last about 15 days, so repeat step 5 roughly every two weeks. When it lapses (or before the first login), the Data tab says "Fyers login is missing or has expired". Current Fyers prices will resume after you refresh the Fyers login; Bhavcopy remains available for historical data.
 
 ## Notes
 - Rotate the secrets if they are ever exposed: `supabase secrets set` again, then redo step 5.
