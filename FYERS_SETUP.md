@@ -47,7 +47,7 @@ Everything below can be done from the Supabase dashboard and the GitHub website.
    Open the printed URL, log in, paste the URL you are redirected to, then run the SQL it prints in the Supabase SQL Editor.
 
 ## Keeping it running
-The function renews the daily access token itself using the refresh token and your PIN. Fyers refresh tokens last about 15 days, so repeat step 5 roughly every two weeks. When it lapses, the Data tab says "Fyers login has expired" and prices fall back to Bhavcopy until you do.
+The function renews the daily access token itself using the refresh token and your PIN. Fyers refresh tokens last about 15 days, so repeat step 5 roughly every two weeks. When it lapses (or before the first login), the Data tab says "Fyers login is missing or has expired" and prices fall back to Bhavcopy until you do.
 
 ## Notes
 - Rotate the secrets if they are ever exposed: `supabase secrets set` again, then redo step 5.
