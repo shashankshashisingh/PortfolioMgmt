@@ -1205,7 +1205,7 @@ function renderHoldings(){
       if(!side.items.length)continue;
       const sideKey='SIDE:'+c+':'+side.key,sideOpen=!COLLAPSED[sideKey];
       const sideProfit=sum(side.items.map(p=>p.unreal));
-      body+='<tr class="grp"><td colspan="11" style="padding:8px 10px 8px 28px;font-weight:600"><button class="grpbtn" data-grp="'+esc(sideKey)+'" aria-expanded="'+sideOpen+'"><span aria-hidden="true">'+(sideOpen?'▾':'▸')+'</span>'+side.label+' <span class="cnt">'+side.items.length+(side.items.length===1?' position':' positions')+'</span> <span class="cnt '+sg(sideProfit)+'">Profit: '+inrS(sideProfit)+'</span></button></td></tr>';
+      body+='<tr class="grp"><td colspan="11" style="padding:8px 10px 8px 28px"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%"><button class="grpbtn" data-grp="'+esc(sideKey)+'" aria-expanded="'+sideOpen+'" style="font-weight:600"><span aria-hidden="true">'+(sideOpen?'▾':'▸')+'</span>'+side.label+' <span class="cnt">'+side.items.length+(side.items.length===1?' position':' positions')+'</span></button><span class="'+sg(sideProfit)+'" style="font-weight:700;white-space:nowrap">Profit: '+inrS(sideProfit)+'</span></div></td></tr>';
       if(!sideOpen)continue;
       for(const p of side.items.slice().sort(cmp)){
         const sp=spark((C.px[p.s]||[]).slice(-30));
