@@ -22,13 +22,13 @@ Email/password signup, login, password reset, and per-user cloud portfolio persi
 
 ## Data sources
 
-**NSE CM Bhavcopy is the primary source for equity prices and symbol names.** The GitHub Action downloads the latest available official cash-market Bhavcopy and updates:
+**NSE CM Bhavcopy is the daily end-of-day source for equity closes and symbol names. Live prices during market hours come from Fyers (signed-in users) and fall back to Bhavcopy; see [FYERS_SETUP.md](FYERS_SETUP.md).** The GitHub Action downloads the latest available official cash-market Bhavcopy and updates:
 - `data/prices.json`: latest EQ/BE closing prices, previous close, percentage change and company name.
 - `data/directory.json`: searchable symbol/company directory built from Bhavcopy symbols.
 - `data/bhavcopy.json`: up to 30 cached daily Bhavcopies for MCP queries.
 - `data/history.json`: daily closing-price series merged from Bhavcopy.
 
-Bhavcopy is end-of-day data, **not an intraday real-time quote feed**. The dashboard uses the latest available Bhavcopy close where a quote is available; demo holdings or symbols without a quote can still display simulated fallback values. GitHub Actions may be delayed, and NSE may block requests from cloud runners.
+Bhavcopy is end-of-day data, **not an intraday real-time quote feed**. Intraday quotes come from the Fyers Edge Function (`supabase/functions/fyers-quotes`), which keeps your Fyers credentials server-side. Without Fyers, or when signed out, the dashboard uses the latest available Bhavcopy close where a quote is available; demo holdings or symbols without a quote can still display simulated fallback values. GitHub Actions may be delayed, and NSE may block requests from cloud runners.
 
 The separate historical backfill workflow (`.github/workflows/update-history.yml`) supplements older history; it does not supply current dashboard prices or the symbol directory.
 
@@ -52,6 +52,7 @@ GitHub Actions refreshes the cache; it does not host a persistent MCP endpoint. 
 ## Tests
 - `npm test`
 - `npm run test:bhavcopy`
+- `npm run test:fyers`
 
 ## Roadmap
 - Dividends and corporate actions

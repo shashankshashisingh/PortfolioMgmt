@@ -7,7 +7,9 @@
     "fetch:bhavcopy": "node scripts/fetch-bhavcopy.mjs",
     "bhavcopy": "node mcp/server.js",
     "test": "node tests/core.test.js",
-    "test:bhavcopy": "node tests/bhavcopy.test.js"
+    "test:bhavcopy": "node tests/bhavcopy.test.js",
+    "test:fyers": "node tests/fyers.test.js",
+    "fyers:login": "node scripts/fyers-login.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
