@@ -1083,15 +1083,19 @@ function fundNavData(){
     const cash=A.ps.invested.map(v=>corpus-v);
     const assets=A.ps.value.map((v,j)=>v+cash[j]);
     const fundCharges=chargeRows.filter(r=>r.t.fund===f.id);
-    const chargeByDate={};
-    for(const r of fundCharges){
-      const fixed=Math.max(0,(r.total||0)-(r.borrowing||0)-(r.mtfInterest||0));
-      chargeByDate[r.t.date]=(chargeByDate[r.t.date]||0)+fixed;
-    }
-    let accruedFixed=0;
+    // Deduct fixed transaction charges cumulatively from their trade date onward,
+    // even when the price-history series has no point on the exact trade date.
+    const fixedCharges=fundCharges.map(r=>({
+      date:String(r.t.date||'').slice(0,10),
+      amount:Math.max(0,(r.total||0)-(r.borrowing||0)-(r.mtfInterest||0))
+    })).filter(r=>r.date).sort((a,b)=>a.date.localeCompare(b.date));
+    let chargeIndex=0,accruedFixed=0;
     const nav=assets.map((v,j)=>{
-      const date=C.dates[j];
-      accruedFixed+=chargeByDate[date]||0;
+      const date=String(C.dates[j]||'').slice(0,10);
+      while(chargeIndex<fixedCharges.length&&fixedCharges[chargeIndex].date<=date){
+        accruedFixed+=fixedCharges[chargeIndex].amount;
+        chargeIndex++;
+      }
       // Ongoing short borrowing and MTF interest are accrued estimates available as of today.
       const accruedNow=j===assets.length-1?fundCharges.reduce((n,r)=>n+(r.borrowing||0)+(r.mtfInterest||0),0):0;
       return (v-accruedFixed-accruedNow)/units;
