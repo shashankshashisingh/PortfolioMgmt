@@ -350,6 +350,7 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
     <button role="tab" data-tab="today" aria-selected="true">Home</button>
     <button role="tab" data-tab="funds" aria-selected="false">Funds</button>
     <button role="tab" data-tab="holdings" aria-selected="false">Holdings</button>
+    <button role="tab" data-tab="borrow" aria-selected="false">Borrow Stocks</button>
     <button role="tab" data-tab="stats" aria-selected="false">Statistics</button>
     <button role="tab" data-tab="bench" aria-selected="false">vs Benchmark</button>
     <button role="tab" data-tab="rebalance" aria-selected="false">Rebalance</button>
@@ -446,6 +447,29 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
     <div class="panel">
       <h2>Transactions</h2>
       <div class="tw" id="txnTable"></div>
+    </div>
+  </section>
+
+  <!-- BORROW STOCKS -->
+  <section id="tab-borrow" class="stack" hidden>
+    <div class="panel">
+      <h2>Borrow paper shares <span class="hint">Reserve fund margin before short selling</span></h2>
+      <p class="note">Paper borrowing only; this does not place an SLBM order with Dhan or any broker. Borrowed shares become eligible to short after T+2 trading days (weekends skipped). NSE holidays are not automatically accounted for. Margin is blocked at 115% of borrow notional and remains part of fund assets.</p>
+      <form class="f" id="borrowForm" autocomplete="off" style="margin-top:14px">
+        <label class="fl">Fund<select id="bFund" required></select></label>
+        <label class="fl">Borrow date<input type="date" id="bDate" required></label>
+        <label class="fl">Symbol / ticker<input id="bSym" list="symList" placeholder="e.g. RELIANCE" autocapitalize="characters" spellcheck="false" required></label>
+        <label class="fl">Quantity<input id="bQty" type="number" min="0.001" step="any" required></label>
+        <label class="fl">Borrow price (₹)<input id="bPrice" type="number" min="0.01" step="any" placeholder="Blank = market price"></label>
+        <div class="fl"><span class="lbl">Margin to block</span><div class="v" id="borrowMarginPreview">—</div><span class="note" id="borrowPriceHint">Quantity × price × 115%</span></div>
+        <button class="btn" type="submit">Borrow shares (paper)</button>
+      </form>
+      <div class="msg" id="borrowMsg" role="status" aria-live="polite"></div>
+    </div>
+    <div class="panel">
+      <h2>Borrow ledger <span class="hint">Fund-specific borrowings, settlement eligibility and blocked margin</span></h2>
+      <div class="strip" id="borrowKpis"></div>
+      <div class="tw" id="borrowTable"></div>
     </div>
   </section>
 
@@ -602,8 +626,8 @@ function processTxns(txns){
     const b=book[t.symbol]||(book[t.symbol]={lots:[],shortLots:[],realised:0});if(!b.shortLots)b.shortLots=[];
     if(t.type==='BUY')b.lots.push({date:t.date,qty:t.qty,price:t.price});
     else if(t.type==='SELL'){let q=t.qty;while(q>1e-9&&b.lots.length){const l=b.lots[0],take=Math.min(l.qty,q);b.realised+=take*(t.price-l.price);l.qty-=take;q-=take;if(l.qty<=1e-9)b.lots.shift()}}
-    else if(t.type==='SHORT')b.shortLots.push({date:t.date,qty:t.qty,price:t.price});
-    else if(t.type==='COVER'){let q=t.qty;while(q>1e-9&&b.shortLots.length){const l=b.shortLots[0],take=Math.min(l.qty,q);b.realised+=take*(l.price-t.price);l.qty-=take;q-=take;if(l.qty<=1e-9)b.shortLots.shift()}}
+    else if(t.type==='SHORT')b.shortLots.push({date:t.date,qty:t.qty,price:t.price,allocations:Array.isArray(t.borrowAllocations)?t.borrowAllocations.map(a=>({borrowId:a.borrowId,qty:Number(a.qty)||0})):[]});
+    else if(t.type==='COVER'){let q=t.qty;while(q>1e-9&&b.shortLots.length){const l=b.shortLots[0],take=Math.min(l.qty,q);b.realised+=take*(l.price-t.price);let allocTake=take;while(allocTake>1e-9&&l.allocations&&l.allocations.length){const a=l.allocations[0],at=Math.min(a.qty,allocTake);a.qty-=at;allocTake-=at;if(a.qty<=1e-9)l.allocations.shift()}l.qty-=take;q-=take;if(l.qty<=1e-9)b.shortLots.shift()}}
   }
   return book;
 }
@@ -862,13 +886,16 @@ let S=null,DEMO_AUX=null;
 const FEED={meta:{},updated:'',dir:{},hist:null,raw:null};
 const REPO={env:'',priceCount:0,priceUpdated:'',priceErr:'',priceErrors:{},dirCount:0,dirErr:'',histCount:0,histUpdated:'',histErr:''};
 const PAGES_URL='https://shashankshashisingh.github.io/PortfolioMgmt/';
-function blank(){return {mode:'user',ver:2,txns:[],meta:{},series:{},manual:{},live:{},bench:'',rf:7,targets:{},feedUrl:'',period:'1Y',sort:{k:'value',dir:-1},nextId:1,funds:[{id:'f1',name:'Main',bench:'',totalAssets:0}],view:'ALL'}}
+function blank(){return {mode:'user',ver:2,txns:[],borrowings:[],nextBorrowId:1,meta:{},series:{},manual:{},live:{},bench:'',rf:7,targets:{},feedUrl:'',period:'1Y',sort:{k:'value',dir:-1},nextId:1,funds:[{id:'f1',name:'Main',bench:'',totalAssets:0}],view:'ALL'}}
 function demoState(){
   const d=buildDemo();DEMO_AUX={beta:d.beta,idio:d.idio,fixed:d.fixed};
   return {mode:'demo',ver:2,txns:d.txns,meta:d.meta,series:d.series,manual:{},live:{},bench:'NIFTY50',rf:7,targets:{ALL:Object.assign({},DEMO_TARGETS)},feedUrl:'',period:'1Y',sort:{k:'value',dir:-1},nextId:d.txns.length+1,
     funds:[{id:'f1',name:'Large Cap',bench:'NIFTY50'},{id:'f2',name:'Mid Cap',bench:'NIFTYMID150'},{id:'f3',name:'Small Cap',bench:'NIFTYSMALL250'},{id:'f4',name:'Defensive',bench:''}],view:'ALL'};
 }
 function normalize(){
+  if(!Array.isArray(S.borrowings))S.borrowings=[];
+  if(!Number.isFinite(Number(S.nextBorrowId)))S.nextBorrowId=S.borrowings.length+1;
+  S.borrowings.forEach((b,i)=>{b.id=b.id||('b'+(i+1));b.fund=b.fund||S.funds?.[0]?.id;b.symbol=String(b.symbol||'').toUpperCase();b.qty=Math.max(0,Number(b.qty)||0);b.price=Math.max(0,Number(b.price)||0);b.returnedUnusedQty=Math.max(0,Number(b.returnedUnusedQty)||0);});
   if(!S.targets)S.targets={};
   const tk0=Object.keys(S.targets);
   if(tk0.length&&typeof S.targets[tk0[0]]==='number')S.targets={ALL:S.targets};
@@ -927,6 +954,30 @@ function simTick(){
 /* ---------- compute ---------- */
 let C=null;
 function viewTxns(){return S.view==='ALL'?S.txns:S.txns.filter(t=>t.fund===S.view)}
+function addTradingDays(dateStr,count){
+  const d=new Date(String(dateStr||istNow().date)+'T00:00:00Z');let added=0;
+  while(added<count){d.setUTCDate(d.getUTCDate()+1);const w=d.getUTCDay();if(w!==0&&w!==6)added++}
+  return d.toISOString().slice(0,10);
+}
+function borrowShortedQty(borrowId){
+  return sum(S.txns.filter(t=>t.type==='SHORT').flatMap(t=>(t.borrowAllocations||[]).filter(a=>a.borrowId===borrowId).map(a=>Number(a.qty)||0)));
+}
+function borrowAvailableQty(b,asOf){
+  return addTradingDays(b.date,2)<=String(asOf||istNow().date).slice(0,10)?Math.max(0,Number(b.qty||0)-Number(b.returnedUnusedQty||0)-borrowShortedQty(b.id)):0;
+}
+function borrowUnusedMargin(fundId){
+  return sum(S.borrowings.filter(b=>b.fund===fundId).map(b=>Math.max(0,Number(b.qty||0)-Number(b.returnedUnusedQty||0)-borrowShortedQty(b.id))*Number(b.price||0)*1.15));
+}
+function allocateBorrowings(fundId,symbol,qty,asOf){
+  let remaining=qty;const allocations=[];
+  const rows=S.borrowings.filter(b=>b.fund===fundId&&b.symbol===symbol).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  for(const b of rows){const available=borrowAvailableQty(b,asOf),take=Math.min(available,remaining);if(take>1e-9){allocations.push({borrowId:b.id,qty:take});remaining-=take}if(remaining<=1e-9)break}
+  return remaining<=1e-9?allocations:null;
+}
+function fundCashNow(fundId){
+  const f=S.funds.find(x=>x.id===fundId),tx=S.txns.filter(t=>t.fund===fundId);
+  return Math.max(0,Number(f&&f.totalAssets||0)-tx.reduce((acc,t)=>acc+(['BUY','COVER'].includes(t.type)?1:-1)*t.qty*t.price,0));
+}
 function analyze(txns,px,dates,n){
   const book=processTxns(txns),pos=[];
   for(const s in book){
@@ -1106,7 +1157,7 @@ function fundNavData(){
       return (v-accruedFixed-accruedNow)/units;
     });
     const last=Math.max(0,nav.length-1);
-    const marginNow=A.shortMargin||0;
+    const marginNow=(A.shortMargin||0)+borrowUnusedMargin(f.id);
     const currentAssets=assets.length?assets[last]:corpus;
     const totalCharges=fundCharges.reduce((n,r)=>n+(r.total||0),0);
     return {f,i,tx,A,corpus,units,cash,assets,nav,current:nav.length?nav[last]:(corpus-totalCharges)/units,
@@ -1185,7 +1236,7 @@ const COLLAPSED={};
 function renderHoldings(){
   const fundId=S.view!=='ALL'?S.view:(S.funds[0]&&S.funds[0].id),fund=S.funds.find(f=>f.id===fundId),fundTx=S.txns.filter(t=>t.fund===fundId),fundA=analyze(fundTx,C.px,C.dates,C.n),aum=Number(fund&&fund.totalAssets)||0;
   const h=(fundId?fundA.held:C.held)||[];
-  const usedLong=sum(h.filter(p=>p.side!=='SHORT').map(p=>p.value)),cash=Math.max(0,aum-usedLong-sum(h.filter(p=>p.side==='SHORT').map(p=>p.value*1.15)));
+  const usedLong=sum(h.filter(p=>p.side!=='SHORT').map(p=>p.value)),cash=Math.max(0,aum-usedLong-sum(h.filter(p=>p.side==='SHORT').map(p=>p.value*1.15))-borrowUnusedMargin(fundId));
   for(const p of h)p.w=aum>0?p.value/aum:0;
   const k=S.sort.k,dir=S.sort.dir;
   const cmp=(a,b)=>{const x=a[k],y=b[k];return (typeof x==='string'?x.localeCompare(y):(x-y))*dir};
@@ -1245,7 +1296,7 @@ function fillSymbolLists(){
 function fundName(id){const f=S.funds.find(x=>x.id===id);return f?f.name:'—'}
 function renderFundbar(){
   const el=$('#fundbar');
-  const show=['today','holdings','stats','bench','rebalance','charges'].includes(activeTab)&&S.funds.length>1;
+  const show=['today','holdings','borrow','stats','bench','rebalance','charges'].includes(activeTab)&&S.funds.length>1;
   el.hidden=!show;
   el.innerHTML='<span class="lbl">Fund</span><button class="chip" data-view="ALL" aria-pressed="'+(S.view==='ALL')+'">All funds</button>'+
     S.funds.map(f=>'<button class="chip" data-view="'+esc(f.id)+'" aria-pressed="'+(S.view===f.id)+'">'+esc(f.name)+'</button>').join('');
@@ -1571,6 +1622,29 @@ function renderRebalance(){
   const h=C.held.slice().sort((a,b)=>b.value-a.value);
   $('#concBox').innerHTML=h.slice(0,8).map(p=>'<div class="row" style="grid-template-columns:1fr auto"><span class="nm"><b>'+esc(p.s)+'</b> <span class="muted">'+esc(p.cls)+'</span></span><span class="mono">'+pc(p.w,1)+'</span><div class="bar"><i style="background:'+clsColor(p.cls)+';left:0;width:'+Math.min(100,p.w*100*2.2).toFixed(1)+'%"></i></div></div>').join('')+'<p class="note">Bars are scaled so a 45% position fills the track.</p>';
 }
+function renderBorrowTab(){
+  const current=S.view!=='ALL'&&S.funds.some(f=>f.id===S.view)?S.view:(S.funds[0]&&S.funds[0].id);
+  const cur=$('#bFund').value;
+  $('#bFund').innerHTML=S.funds.map(f=>'<option value="'+esc(f.id)+'">'+esc(f.name)+'</option>').join('');
+  $('#bFund').value=S.funds.some(f=>f.id===cur)?cur:(current||'');
+  const fundId=$('#bFund').value,rows=S.borrowings.filter(b=>b.fund===fundId).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const today=istNow().date;let totalBlocked=0,totalAvailable=0,totalPending=0;
+  const body=rows.map(b=>{
+    const eligibleDate=addTradingDays(b.date,2),available=borrowAvailableQty(b,today),shorted=borrowShortedQty(b.id);
+    const unused=Math.max(0,b.qty-b.returnedUnusedQty-shorted),blocked=unused*b.price*1.15;
+    totalBlocked+=blocked;totalAvailable+=available;if(eligibleDate>today)totalPending+=unused;
+    const action=unused>1e-9?'<button class="btn ghost sm" data-return-borrow="'+esc(b.id)+'">Return unused</button>':'—';
+    return '<tr><td>'+esc(fmtD(b.date))+'</td><td>'+esc(b.symbol)+'</td><td class="n">'+nm(b.qty,3)+'</td><td>'+esc(fmtD(eligibleDate))+'</td><td class="n">'+nm(available,3)+'</td><td class="n">'+inr(b.price,2)+'</td><td class="n">'+inr(blocked)+'</td><td>'+action+'</td></tr>';
+  }).join('');
+  $('#borrowKpis').innerHTML='<div><div class="k">Margin blocked · '+esc(fundName(fundId))+'</div><div class="v big">'+inr(totalBlocked)+'</div><div class="s muted">Unused borrowed shares at 115% of borrow price</div></div><div><div class="k">Eligible to short</div><div class="v">'+nm(totalAvailable,3)+' shares</div><div class="s muted">Eligible borrowing quantity in this fund</div></div><div><div class="k">Pending T+2</div><div class="v">'+nm(totalPending,3)+' shares</div><div class="s muted">Not yet eligible to short</div></div>';
+  $('#borrowTable').innerHTML=rows.length?'<table><thead><tr><th>Borrow date</th><th>Symbol</th><th class="n">Borrowed</th><th>Eligible from</th><th class="n">Available to short</th><th class="n">Borrow price</th><th class="n">Margin blocked</th><th>Action</th></tr></thead><tbody>'+body+'</tbody></table>':'<div class="empty">No paper borrowings for this fund yet. Borrow shares above to reserve margin.</div>';
+}
+function updateBorrowPreview(){
+  const sym=$('#bSym').value.trim().toUpperCase(),qty=Number($('#bQty').value),typed=$('#bPrice').value.trim(),market=typed===''?marketPriceFor(sym):null,price=typed===''?(market&&market.price):Number(typed);
+  const valid=Number.isFinite(qty)&&qty>0&&Number.isFinite(price)&&price>0;
+  $('#borrowMarginPreview').textContent=valid?inr(qty*price*1.15,2):'—';
+  $('#borrowPriceHint').textContent=typed!==''?'Quantity × entered borrow price × 115%':(valid?'Quantity × market price × 115% ('+market.source+')':'Enter a symbol and quantity; market price is used if price is blank.');
+}
 function renderData(){
   // The custom feed URL input was removed when the app switched to repository data + FYERS.
   // Do not dereference the old #feedUrl element; it no longer exists in the Data tab.
@@ -1579,11 +1653,13 @@ function renderData(){
 function renderAll(){
   compute();
   renderStatus();renderBanner();renderFundbar();renderPeriod();fillSymbolLists();
+  if($('#bDate')&&!$('#bDate').value)$('#bDate').value=istNow().date;
   renderTabContent();
 }
 function renderTabContent(){
   if(activeTab==='today')renderToday();
   else if(activeTab==='holdings'){renderHoldings();renderTxns()}
+  else if(activeTab==='borrow')renderBorrowTab();
   else if(activeTab==='funds')renderFunds();
   else if(activeTab==='stats')renderStats();
   else if(activeTab==='bench')renderBench();
@@ -2040,16 +2116,16 @@ function updateAvailableQuantity(){
   const longQty=sum(book.lots.map(l=>l.qty)),shortQty=sum((book.shortLots||[]).map(l=>l.qty));
   const netQty=longQty-shortQty;
   if(portfolioHint)portfolioHint.textContent='Portfolio shares: '+(netQty>1e-9?'+':netQty< -1e-9?'−':'')+nm(Math.abs(netQty),Math.abs(netQty)%1?3:0);
-  if(!sym||!['SELL','COVER'].includes(type)){
-    hint.textContent=type==='SELL'?'Select a symbol to see shares available to sell.':type==='COVER'?'Select a symbol to see shares available to cover.':'Available quantity is shown for Sell and Cover short.';
+  if(!sym||!['SELL','COVER','SHORT'].includes(type)){
+    hint.textContent=type==='SELL'?'Select a symbol to see shares available to sell.':type==='COVER'?'Select a symbol to see shares available to cover.':type==='SHORT'?'Select a symbol to see borrowed shares available to short.':'Available quantity is shown for Sell, Short sell and Cover short.';
     return;
   }
-  const available=type==='SELL'?longQty:shortQty;
+  const available=type==='SELL'?longQty:type==='COVER'?shortQty:sum(S.borrowings.filter(b=>b.fund===fund&&b.symbol===sym).map(b=>borrowAvailableQty(b,$('#fDate').value||istNow().date)));
   qty.max=String(Math.max(0,available));
-  hint.textContent='Available to '+(type==='SELL'?'sell':'cover')+' in '+fundName(fund)+': '+nm(Math.max(0,available),Math.max(0,available)%1?3:0)+' shares.';
-  if(available<=1e-9)hint.textContent+=' No eligible position recorded for this fund and symbol.';
+  hint.textContent=(type==='SHORT'?'Borrowed quantity available to short':('Available to '+(type==='SELL'?'sell':'cover')+' in '+fundName(fund)))+': '+nm(Math.max(0,available),Math.max(0,available)%1?3:0)+' shares.';
+  if(available<=1e-9)hint.textContent+=type==='SHORT'?' No borrowed shares are eligible yet; borrowing becomes eligible after T+2 trading days.':' No eligible position recorded for this fund and symbol.';
 }
-['fFund','fType','fSym'].forEach(id=>$('#'+id).addEventListener('change',updateAvailableQuantity));
+['fFund','fType','fSym','fDate'].forEach(id=>$('#'+id).addEventListener('change',updateAvailableQuantity));
 ['fSym','fType'].forEach(id=>$('#'+id).addEventListener('input',updateAvailableQuantity));
 
 $('#txnForm').addEventListener('submit',e=>{
@@ -2066,17 +2142,22 @@ $('#txnForm').addEventListener('submit',e=>{
   const longHeld=sum(b.lots.map(l=>l.qty)),shortHeld=sum((b.shortLots||[]).map(l=>l.qty));
   if(type==='SELL'&&(shortHeld>1e-9||qty>longHeld+1e-9)){msg(M,shortHeld>1e-9?'This symbol is currently short. Use Cover short to close it.':'The '+fundName(fund)+' fund holds '+longHeld+' long shares of '+sym+', so you cannot sell '+qty+'.','err');return}
   if(type==='SHORT'&&(longHeld>1e-9||shortHeld>1e-9)){msg(M,'Close the existing position in '+sym+' before opening a short position.','err');return}
+  const borrowAllocations=type==='SHORT'?allocateBorrowings(fund,sym,qty,date):null;
+  if(type==='SHORT'&&!borrowAllocations){const eligible=sum(S.borrowings.filter(b=>b.fund===fund&&b.symbol===sym).map(b=>borrowAvailableQty(b,date)));msg(M,'Only '+nm(eligible,3)+' borrowed shares of '+sym+' are eligible to short in '+fundName(fund)+' on '+fmtD(date)+'. Borrowing becomes eligible after T+2 trading days.','err');return}
   if(type==='COVER'&&(shortHeld<=1e-9||qty>shortHeld+1e-9)){msg(M,'The '+fundName(fund)+' fund has '+shortHeld+' shares short in '+sym+', so it cannot cover '+qty+'.','err');return}
   if(type==='BUY'&&shortHeld>1e-9){msg(M,'This symbol is currently short. Use Cover short to close it.','err');return}
   if(type==='SHORT'){
     const existingMargin=sum(Object.keys(book).map(k=>sum((book[k].shortLots||[]).map(l=>l.qty))*((marketPriceFor(k)||{}).price||price)*1.15));
-    const fundConfig=S.funds.find(f=>f.id===fund);
-    const cashNow=(Number(fundConfig&&fundConfig.totalAssets)||0)-fundTx.reduce((acc,t)=>acc+(['BUY','COVER'].includes(t.type)?1:-1)*t.qty*t.price,0);
-    const availableAfter=cashNow+qty*price-existingMargin-qty*price*1.15;
-    if(availableAfter< -1e-9){msg(M,'Insufficient available cash for 115% short margin. Required for this trade: '+inr(qty*price*1.15)+'.','err');return}
+    const cashNow=fundCashNow(fund);
+    const remainingBorrowMargin=sum(S.borrowings.filter(b=>b.fund===fund).map(b=>{
+      const allocated=(borrowAllocations||[]).find(a=>a.borrowId===b.id);
+      return Math.max(0,Number(b.qty||0)-Number(b.returnedUnusedQty||0)-borrowShortedQty(b.id)-(allocated?allocated.qty:0))*Number(b.price||0)*1.15;
+    }));
+    const availableAfter=cashNow+qty*price-existingMargin-qty*price*1.15-remainingBorrowMargin;
+    if(availableAfter< -1e-9){msg(M,'Insufficient available cash after reserving 115% short margin and existing paper-borrow margin. Available before this trade: '+inr(cashNow-existingMargin-borrowUnusedMargin(fund))+'.','err');return}
   }
   const productMode=$('#fProduct').value||'AUTO';
-  S.txns.push({id:S.nextId++,date,symbol:sym,type,qty,price,fund,productMode});
+  S.txns.push({id:S.nextId++,date,symbol:sym,type,qty,price,fund,productMode,...(type==='SHORT'?{borrowAllocations}: {})});
   const old=S.meta[sym]||{};
   S.meta[sym]={name:$('#fName').value.trim()||old.name||sym,cls:$('#fCls').value,sector:(lookedUp[sym]&&lookedUp[sym].sector)||old.sector||''};
   if(!S.series[sym])S.series[sym]={d:[date],c:[price]};
@@ -2089,6 +2170,31 @@ $('#txnForm').addEventListener('submit',e=>{
   msg(M,({BUY:'Bought ',SELL:'Sold ',SHORT:'Short sold ',COVER:'Covered '}[type]||'Traded ')+qty+' '+sym+' at '+inr(price,2)+' ('+inr(notional,2)+' notional)'+(type==='SHORT'?' · margin required at 115% ('+inr(notional*1.15)+')':'')+(typedPrice===''?' using '+market.source+'.':'.'),'ok');
   updateTradeNotional();
   renderAll();
+});
+['bSym','bQty','bPrice'].forEach(id=>$('#'+id).addEventListener('input',updateBorrowPreview));
+['bSym','bPrice'].forEach(id=>$('#'+id).addEventListener('change',updateBorrowPreview));
+$('#bFund').addEventListener('change',()=>{renderBorrowTab();updateBorrowPreview()});
+$('#borrowForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  if(S.mode==='demo'){msg($('#borrowMsg'),'This is the example portfolio. Import your holdings or start empty before borrowing shares.','err');return}
+  const fund=$('#bFund').value,date=$('#bDate').value,symbol=$('#bSym').value.trim().toUpperCase(),qty=Number($('#bQty').value),typed=$('#bPrice').value.trim(),market=typed===''?marketPriceFor(symbol):null,price=typed===''?(market&&market.price):Number(typed);
+  if(!fund||!date||!symbol||!(qty>0)||!Number.isFinite(price)||price<=0){msg($('#borrowMsg'),typed===''?'Enter a fund, borrow date, symbol and quantity; a market price must be available.':'Enter a valid fund, date, symbol, quantity and positive price.','err');return}
+  const margin=qty*price*1.15,book=processTxns(S.txns.filter(t=>t.fund===fund));
+  const shortMargin=sum(Object.keys(book).map(k=>sum((book[k].shortLots||[]).map(l=>l.qty))*((marketPriceFor(k)||{}).price||price)*1.15));
+  const availableCash=fundCashNow(fund)-shortMargin-borrowUnusedMargin(fund);
+  if(margin>availableCash+1e-9){msg($('#borrowMsg'),'Insufficient available fund cash. Margin to block: '+inr(margin)+'. Available before borrowing: '+inr(Math.max(0,availableCash))+'.','err');return}
+  S.borrowings.push({id:'b'+(S.nextBorrowId++),fund,date,symbol,qty,price,returnedUnusedQty:0});
+  if(!S.meta[symbol])S.meta[symbol]={name:(FEED.dir[symbol]&&FEED.dir[symbol].n)||symbol,cls:'Equities',sector:''};
+  if(!S.series[symbol])S.series[symbol]={d:[date],c:[price]};
+  save();renderAll();$('#bFund').value=fund;renderBorrowTab();$('#bQty').value='';$('#bPrice').value='';
+  msg($('#borrowMsg'),'Paper-borrowed '+nm(qty,3)+' '+symbol+' for '+fundName(fund)+'. '+inr(margin)+' margin is now blocked. Eligible to short from '+fmtD(addTradingDays(date,2))+'.'+(typed===''?' Used '+market.source+'.':''),'ok');updateBorrowPreview();
+});
+$('#borrowTable').addEventListener('click',e=>{
+  const btn=e.target.closest('[data-return-borrow]');if(!btn)return;
+  const b=S.borrowings.find(x=>x.id===btn.dataset.returnBorrow);if(!b)return;
+  const unused=Math.max(0,b.qty-b.returnedUnusedQty-borrowShortedQty(b.id));
+  if(unused<=1e-9){msg($('#borrowMsg'),'No unused borrowed shares are available to return.','err');return}
+  b.returnedUnusedQty+=unused;save();renderAll();$('#bFund').value=b.fund;renderBorrowTab();msg($('#borrowMsg'),'Returned '+nm(unused,3)+' unused '+b.symbol+' shares. '+inr(unused*b.price*1.15)+' margin has been released.','ok');
 });
 $('#fundForm').addEventListener('submit',e=>{
   e.preventDefault();
