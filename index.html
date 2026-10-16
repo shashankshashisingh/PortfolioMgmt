@@ -553,7 +553,11 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
     <div class="grid2">
       <div class="panel">
         <h2>Market data source</h2>
-        <div class="msg" id="feedMsg">Prices are loaded from data/prices.json.</div>
+        <div class="msg" id="feedMsg">NSE Bhavcopy supplies historical/reference prices. FYERS live prices refresh automatically when connected.</div>
+        <div class="cols" style="align-items:center;margin-top:10px">
+          <button class="btn" type="button" id="connectFyersBtn">Connect FYERS</button>
+          <span class="msg" id="fyersStatus" aria-live="polite">Sign in to connect your FYERS account once.</span>
+        </div>
       </div>
       <div class="panel">
         <h2>Your data</h2>
@@ -1683,6 +1687,89 @@ function ensureUser(){
   setTimeout(loadRepoData,0);
 }
 
+/* ---------- FYERS live quotes and one-time authorization ---------- */
+let fyersBusy=false;
+function fyersStatus(message,kind=''){
+  const el=$('#fyersStatus');if(el){el.className='msg '+kind;el.textContent=message}
+}
+async function connectFyers(){
+  if(!cloudClient||!cloudUser){fyersStatus('Sign in to PortfolioMgmt first, then connect FYERS.','err');openAccount('login');return}
+  try{
+    const state=Array.from(crypto.getRandomValues(new Uint8Array(24))).map(b=>b.toString(16).padStart(2,'0')).join('');
+    sessionStorage.setItem('portfolio-fyers-state',state);
+    fyersStatus('Opening FYERS authorization…');
+    const {data,error}=await cloudClient.functions.invoke('fyers-auth',{body:{action:'start',state}});
+    if(error)throw error;
+    if(!data||!data.auth_url)throw new Error(data&&data.message||data&&data.error||'Could not start FYERS authorization');
+    location.href=data.auth_url;
+  }catch(e){
+    console.error('FYERS authorization start failed',e);
+    fyersStatus('Could not start authorization. Check the Supabase function and try again.','err');
+  }
+}
+async function handleFyersCallback(){
+  const params=new URLSearchParams(location.search);
+  const authCode=params.get('auth_code');
+  const fyersError=params.get('s')==='error'||params.has('error');
+  if(!authCode&&!fyersError)return;
+  if(fyersError){fyersStatus('FYERS authorization was not completed. Select Connect FYERS to try again.','err');history.replaceState(null,'',PAGES_URL);return}
+  if(!cloudClient||!cloudUser){fyersStatus('Sign in to PortfolioMgmt, then connect FYERS again.','err');return}
+  const expected=sessionStorage.getItem('portfolio-fyers-state')||'';
+  const received=params.get('state')||'';
+  if(!expected||!received||expected!==received){
+    fyersStatus('Authorization state did not match. For security, please connect again.','err');
+    history.replaceState(null,'',PAGES_URL);return;
+  }
+  try{
+    fyersStatus('Saving your secure FYERS connection…');
+    const {data,error}=await cloudClient.functions.invoke('fyers-auth',{body:{auth_code:authCode}});
+    if(error)throw error;
+    if(!data||!data.connected)throw new Error(data&&data.message||data&&data.error||'FYERS connection failed');
+    sessionStorage.removeItem('portfolio-fyers-state');
+    history.replaceState(null,'',PAGES_URL+(location.hash||''));
+    fyersStatus('FYERS connected. Live quotes will refresh automatically.','ok');
+    await pollFyersQuotes(true);
+  }catch(e){
+    console.error('FYERS authorization callback failed',e);
+    fyersStatus('Could not save the FYERS connection. Please try Connect FYERS again.','err');
+  }
+}
+async function pollFyersQuotes(show){
+  if(fyersBusy||!cloudClient||!cloudUser||!cloudReady||S.mode!=='user')return;
+  const symbols=[...new Set((S.txns||[]).map(t=>String(t.symbol||'').toUpperCase()).filter(Boolean))].filter(k=>!/^NIFTY|^SENSEX/.test(k));
+  const knownIndices=['NIFTY50','NIFTYBANK','NIFTY500','NIFTYNEXT50','NIFTYMID150','NIFTYSMALL250'];
+  const indices=knownIndices.filter(k=>k===S.bench||!!S.series[k]);
+  if(!symbols.length&&!indices.length){if(show)fyersStatus('Connected; add holdings to fetch their live prices.');return}
+  fyersBusy=true;
+  try{
+    const {data,error}=await cloudClient.functions.invoke('fyers-quotes',{body:{symbols:symbols.slice(0,100),indices}});
+    if(error)throw error;
+    if(data&&data.error){
+      if(data.error==='fyers_reauth_required')fyersStatus('FYERS needs authorization again. Select Connect FYERS.','err');
+      else fyersStatus('FYERS quotes unavailable: '+(data.message||data.error),'err');
+      return;
+    }
+    const quotes=data&&data.quotes||{};
+    let count=0;
+    for(const [symbol,q] of Object.entries(quotes)){
+      const p=Number(q&&q.ltp);
+      if(Number.isFinite(p)&&p>0){S.live[symbol]=p;count++}
+    }
+    if(count){
+      FEED.updated=data.asOf||new Date().toISOString();
+      compute();renderStatus();renderAll();
+      fyersStatus('FYERS live prices updated · '+count+' symbols · '+new Date(FEED.updated).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'})+' IST','ok');
+    }else if(data&&data.unresolved&&data.unresolved.length){
+      fyersStatus('Connected, but FYERS could not resolve: '+data.unresolved.slice(0,5).join(', '),'err');
+    }else if(show)fyersStatus('Connected; no live quote was returned yet.');
+  }catch(e){
+    console.error('FYERS quote refresh failed',e);
+    const message=String(e&&e.message||'');
+    if(/fyers_reauth_required|401|unauthorized/i.test(message))fyersStatus('FYERS needs authorization again. Select Connect FYERS.','err');
+    else if(show)fyersStatus('Could not fetch live prices. Check sign-in and Supabase function logs.','err');
+  }finally{fyersBusy=false}
+}
+
 /* ---------- live feed (optional) ---------- */
 let feedTimer=null;
 async function pollFeed(show){
@@ -1722,7 +1809,10 @@ async function pollFeed(show){
 }
 function startFeed(){
   clearInterval(feedTimer);
-  if((S.mode==='user'||S.mode==='demo')&&S.feedUrl){pollFeed(false);feedTimer=setInterval(()=>pollFeed(false),30000)}
+  if((S.mode==='user'||S.mode==='demo')&&S.feedUrl){
+    pollFeed(false);pollFyersQuotes(false);
+    feedTimer=setInterval(()=>{pollFeed(false);pollFyersQuotes(false)},30000);
+  }
 }
 
 /* ---------- events ---------- */
@@ -2110,7 +2200,8 @@ document.getElementById('accountLogout').addEventListener('click',async()=>{
 
 /* ---------- boot ---------- */
 load();
-initCloudAuth();
+initCloudAuth().then(()=>handleFyersCallback()).catch(e=>{console.error('FYERS callback handling failed',e)});
+document.getElementById('connectFyersBtn').addEventListener('click',connectFyers);
 $('#fDate').value=istNow().date;
 initSim();
 if(S.mode==='demo'&&!S.bench)S.bench='NIFTY50';
