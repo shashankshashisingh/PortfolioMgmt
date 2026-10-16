@@ -1571,7 +1571,8 @@ function renderRebalance(){
   $('#concBox').innerHTML=h.slice(0,8).map(p=>'<div class="row" style="grid-template-columns:1fr auto"><span class="nm"><b>'+esc(p.s)+'</b> <span class="muted">'+esc(p.cls)+'</span></span><span class="mono">'+pc(p.w,1)+'</span><div class="bar"><i style="background:'+clsColor(p.cls)+';left:0;width:'+Math.min(100,p.w*100*2.2).toFixed(1)+'%"></i></div></div>').join('')+'<p class="note">Bars are scaled so a 45% position fills the track.</p>';
 }
 function renderData(){
-  $('#feedUrl').value=S.feedUrl||'';
+  // The custom feed URL input was removed when the app switched to repository data + FYERS.
+  // Do not dereference the old #feedUrl element; it no longer exists in the Data tab.
   renderRepoStatus();
 }
 function renderAll(){
