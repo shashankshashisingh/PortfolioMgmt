@@ -1764,9 +1764,16 @@ async function pollFyersQuotes(show){
     }else if(show)fyersStatus('Connected; no live quote was returned yet.');
   }catch(e){
     console.error('FYERS quote refresh failed',e);
-    const message=String(e&&e.message||'');
-    if(/fyers_reauth_required|401|unauthorized/i.test(message))fyersStatus('FYERS needs authorization again. Select Connect FYERS.','err');
-    else if(show)fyersStatus('Could not fetch live prices. Check sign-in and Supabase function logs.','err');
+    let detail=String(e&&e.message||'');
+    try{
+      if(e&&e.context&&typeof e.context.clone==='function'){
+        const body=await e.context.clone().json();
+        if(body&&body.error==='fyers_reauth_required'){fyersStatus('FYERS needs authorization again. Select Connect FYERS.','err');return}
+        if(body&&(body.message||body.error))detail=body.message||body.error;
+      }
+    }catch(_){}
+    if(/fyers_reauth_required|401|unauthorized|refresh token expired/i.test(detail))fyersStatus('FYERS needs authorization again. Select Connect FYERS.','err');
+    else if(show)fyersStatus('Could not fetch live prices. '+(detail||'Check sign-in and Supabase function logs.'),'err');
   }finally{fyersBusy=false}
 }
 
