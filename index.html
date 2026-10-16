@@ -1690,8 +1690,13 @@ function ensureUser(){
 
 /* ---------- FYERS live quotes and one-time authorization ---------- */
 let fyersBusy=false;
+let fyersStatusText='Not connected yet. Select Connect FYERS.';
+let fyersStatusKind='';
 function fyersStatus(message,kind=''){
-  const el=$('#fyersStatus');if(el){el.className='msg '+kind;el.textContent=message}
+  fyersStatusText=String(message||'');
+  fyersStatusKind=kind||'';
+  const el=$('#fyersStatus');if(el){el.className='msg '+fyersStatusKind;el.textContent=fyersStatusText}
+  renderRepoStatus();
 }
 async function connectFyers(){
   if(!cloudClient||!cloudUser){fyersStatus('Sign in to PortfolioMgmt first, then connect FYERS.','err');openAccount('login');return}
@@ -1997,6 +2002,7 @@ function renderRepoStatus(){
   const noFeed=S.mode==='user'&&FEED.raw&&FEED.raw.prices?heldSyms.filter(s=>!FEED.raw.prices[s]):[];
   const pOk=REPO.priceCount>0&&!!REPO.priceUpdated;
   el.innerHTML=
+    line(fyersStatusKind==='ok','FYERS connection',esc(fyersStatusText))+
     line(pOk,'Bhavcopy snapshot / archive',pOk?REPO.priceCount+' symbols, updated '+ago(REPO.priceUpdated)+'. Historical/reference data only; not used as the current quote.':(REPO.priceErr?'could not read data/prices.json ('+esc(REPO.priceErr)+')':'data/prices.json is empty. In your repo, open Actions and run "Update NSE Bhavcopy".'))+
     line(REPO.dirCount>0,'Symbol list',REPO.dirCount>0?REPO.dirCount.toLocaleString('en-IN')+' symbols for lookup':(REPO.dirErr?'could not read data/directory.json ('+esc(REPO.dirErr)+')':'not built yet. It is created by the "Update NSE Bhavcopy" run.'))+
     line(REPO.histCount>0,'Price history',REPO.histCount>0?REPO.histCount+' series, updated '+ago(REPO.histUpdated):(REPO.histErr?'could not read data/history.json ('+esc(REPO.histErr)+')':'empty. Run "Update NSE Bhavcopy" in Actions to append closing prices; historical data feeds statistics and benchmark tabs.'))+
