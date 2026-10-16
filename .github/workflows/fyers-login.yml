@@ -1,7 +1,7 @@
 name: Fyers login
 
 # Exchanges a fresh Fyers auth code for tokens and stores them in Supabase (public.fyers_auth).
-# Run it from the Actions tab roughly every 15 days, or whenever the Data tab says the Fyers login expired.
+# Run it from the Actions tab for initial setup or when the scheduled refresh workflow reports that fresh authorization is required.
 # Tokens are written straight to Supabase and are never printed in this log.
 #
 # Repository secrets needed: FYERS_APP_ID, FYERS_SECRET_ID, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
