@@ -428,7 +428,7 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
           <button class="btn" type="submit">Add</button>
         </form>
         <div class="msg" id="txnMsg"></div>
-        <p class="note">Enter the exchange ticker (for example, RELIANCE or INFY) in Symbol / ticker; the company name, asset class and sector can be filled from the local NSE symbol directory. Use Look up symbol if it is not in the directory. Check the details before saving. Futures and options are valued as quantity times price. Short sales reserve margin equal to 115% of current short notional; use Cover short to close a short position. Prices use the latest Fyers last traded price where available; Bhavcopy is reserved for historical price data.</p>
+        <p class="note">Enter the exchange ticker (for example, RELIANCE or INFY) in Symbol / ticker; the company name, asset class and sector can be filled from the local NSE symbol directory. Use Look up symbol if it is not in the directory. Check the details before saving. Futures and options are valued as quantity times price. Short sales reserve margin equal to 115% of current short notional; use Cover short to close a short position. Prices use available imported or manually entered prices, with Bhavcopy retained for historical reference.</p>
       </div>
     </details>
     <details id="priceBox">
@@ -553,7 +553,6 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
     <div class="grid2">
       <div class="panel">
         <h2>Market data source</h2>
-        <p class="note" style="margin:0 0 10px">Fyers is the primary source for current prices and last traded prices, including when NSE is closed. Quotes refresh every 15 seconds during market hours and about every 5 minutes outside market hours. NSE Bhavcopy is used for historical price data, the symbol directory and the downloadable archive only; it does not override current valuations.</p>
         <div class="msg" id="feedMsg">Prices are loaded from data/prices.json.</div>
       </div>
       <div class="panel">
@@ -1704,7 +1703,7 @@ async function pollFeed(show){
             S.series[K]={d:[day],c:[Number(p)]};
             if(!S.meta[K])S.meta[K]={name:FEED.meta[K]?.name||K,cls:'Equities',sector:FEED.meta[K]?.sector||''};
           }
-          if(!fyersFresh(K))S.live[K]=Number(p);
+          S.live[K]=Number(p);
         }
         n++;
       }
@@ -1905,7 +1904,6 @@ function renderRepoStatus(){
     ((!pOk||!REPO.dirCount)?'<p class="note">If a job shows a red cross in Actions, NSE is probably blocking GitHub\'s servers. The job log has the reason.</p>':'');
 }
 function marketPriceFor(sym){
-  if(fyersFresh(sym))return {price:FYERS.q[sym].ltp,source:'Fyers last traded price'};
   if(Number.isFinite(Number(S.manual[sym]))&&Number(S.manual[sym])>0)return {price:Number(S.manual[sym]),source:'manual current price'};
   if(Number.isFinite(Number(S.live[sym]))&&Number(S.live[sym])>0)return {price:Number(S.live[sym]),source:'available live price'};
   const series=S.series[sym];
