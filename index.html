@@ -1062,7 +1062,8 @@ function range(){return rangeFor(C)}
 function renderStatus(){
   const ist=C.ist||istNow();
   const state=ist.open?'Market open':ist.preopen?'Pre-open':'Market closed';
-  const feed=FEED.raw?.source|| (S.mode==='demo'?(FEED.updated?'NSE Bhavcopy + simulated fallback':'Simulated prices'):S.feedUrl?'NSE Bhavcopy':'Manual and imported prices');
+  const fyersLive=fyersStatusKind==='ok'&&Object.keys(S.live||{}).length>0;
+  const feed=fyersLive?'FYERS live prices':FEED.raw?.source|| (S.mode==='demo'?(FEED.updated?'NSE Bhavcopy + simulated fallback':'Simulated prices'):S.feedUrl?'NSE Bhavcopy (end of day)':'Manual and imported prices');
   const upd=FEED.updated?' · data updated '+new Date(FEED.updated).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'}):'';
   $('#status').innerHTML='<span class="pill"><span class="dot '+(ist.open?'open':'')+'"></span>NSE '+state+'</span><span class="pill">'+esc(feed+upd)+'</span><span class="mono">'+ist.stamp+' IST</span>';
 }
