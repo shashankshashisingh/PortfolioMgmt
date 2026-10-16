@@ -17,7 +17,7 @@ Everything below can be done from the Supabase dashboard and the GitHub website.
 2. **Add the Fyers secrets to Supabase.** Dashboard, Edge Functions, Secrets: add `FYERS_APP_ID`, `FYERS_SECRET_ID` and `FYERS_PIN`.
 3. **Add repository secrets in GitHub** (Settings, Secrets and variables, Actions, New repository secret):
    - `SUPABASE_ACCESS_TOKEN`: create at <https://supabase.com/dashboard/account/tokens>
-   - `FYERS_APP_ID` and `FYERS_SECRET_ID`: same values as step 2
+   - `FYERS_APP_ID`, `FYERS_SECRET_ID` and `FYERS_PIN`: same values as step 2 (the PIN is used only by the scheduled token-renewal job)
    - `SUPABASE_URL`: your project URL, `https://uworsbrulgoylwvxxadh.supabase.co`
    - `SUPABASE_SERVICE_ROLE_KEY`: Supabase dashboard, Project Settings, API Keys: either the `service_role` key (Legacy API keys tab) or a `sb_secret_...` secret key. Never the publishable key, and never put it in a file
    - If your Fyers app uses a custom redirect URL, add it as a repository *variable* named `FYERS_REDIRECT_URI`.
@@ -27,7 +27,7 @@ Everything below can be done from the Supabase dashboard and the GitHub website.
    https://api-t1.fyers.in/api/v3/generate-authcode?client_id=YOUR_APP_ID&redirect_uri=https%3A%2F%2Ftrade.fyers.in%2Fapi-login%2Fredirect-uri%2Findex.html&response_type=code&state=portfoliomgmt
    ```
    You land on the redirect page. Copy the whole address from the address bar (it contains `auth_code=...`), then immediately go to Actions, **Fyers login**, Run workflow, and paste it into the `auth_code` box. Auth codes are single use and expire fast, so if it fails, repeat this step.
-6. Open the site, sign in, and check the Data tab for "Fyers live prices". Repeat step 5 about every 15 days.
+6. Open the site, sign in, and check the Data tab for "Fyers live prices". The new **Refresh Fyers token** workflow runs every day at 06:05 IST and renews the access token automatically using the stored refresh token. You can also run it manually from Actions. Check its run status if live prices stop updating.
 
 ## One-time setup with a terminal
 1. **Create a Fyers API app** at <https://myapi.fyers.in/dashboard>. Note the App ID (like `ABCD1234-100`) and Secret ID, and set a redirect URL (the default `https://trade.fyers.in/api-login/redirect-uri/index.html` works).
@@ -47,7 +47,9 @@ Everything below can be done from the Supabase dashboard and the GitHub website.
    Open the printed URL, log in, paste the URL you are redirected to, then run the SQL it prints in the Supabase SQL Editor.
 
 ## Keeping it running
-The function renews the daily access token itself using the refresh token and your PIN. Fyers refresh tokens last about 15 days, so repeat step 5 roughly every two weeks. When it lapses (or before the first login), the Data tab says "Fyers login is missing or has expired". Current Fyers prices will resume after you refresh the Fyers login; Bhavcopy remains available for historical data.
+The **Refresh Fyers token** GitHub Actions workflow runs daily at 06:05 IST and stores the renewed access token in Supabase. The quote function can also refresh an expired access token on demand. If Fyers returns a replacement refresh token, the app saves it and updates its expiry window. This should avoid routine daily logins while Fyers supports its refresh-token flow.
+
+Fyers may still require a fresh authorization when the refresh token expires or the refresh endpoint refuses renewal. If the scheduled workflow fails with an expired/invalid refresh token, run **Fyers login** from Actions and provide a fresh auth code from the Fyers approval page. This last step cannot be safely bypassed by the app. Check the Actions run history if live prices stop updating; Bhavcopy remains available for historical data.
 
 ## Notes
 - Rotate the secrets if they are ever exposed: `supabase secrets set` again, then redo step 5.
