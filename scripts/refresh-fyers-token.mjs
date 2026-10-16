@@ -75,7 +75,7 @@ const update = {
 };
 // Some Fyers responses rotate the refresh token. Persist it and extend its local
 // expiry window only when Fyers actually returns a replacement refresh token.
-if (body.refresh_token) {
+if (body.refresh_token && body.refresh_token !== row.refresh_token) {
   update.refresh_token = body.refresh_token;
   update.refresh_expires_at = new Date(Date.now() + 14 * 86400000).toISOString();
 }
