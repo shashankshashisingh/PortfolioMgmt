@@ -1944,7 +1944,7 @@ function fyersLine(line){
   const unres=FYERS.unresolved.length?' No Fyers quote for '+FYERS.unresolved.slice(0,6).map(esc).join(', ')+(FYERS.unresolved.length>6?'…':'')+' (no current Fyers quote is available for these symbols).':'';
   if(FYERS.status==='live')return line(true,label,FYERS.count+' quotes, last fetched '+ago(new Date(FYERS.at).toISOString())+'. Refreshes every 15 s during market hours and about every 5 min while closed.'+unres);
   if(FYERS.status==='reauth')return line(false,label,esc(FYERS.err));
-  if(FYERS.status==='error')return line(false,label,'unavailable ('+esc(FYERS.err)+'). No Bhavcopy price is substituted for the current quote.');
+  if(FYERS.status==='error'){const missing=/must be set as secrets|token table unreadable/i.test(FYERS.err);const help=missing?'Fyers setup is incomplete. In GitHub → Actions, run “Configure and deploy Fyers”; check that all six required repository secrets are configured.':esc(FYERS.err);return line(false,label,'unavailable ('+help+'). No Bhavcopy price is substituted for the current quote.');}
   if(FYERS.status==='closed')return line(true,label,'market closed; using the last Fyers quote when available.'+unres);
   return line(false,label,'not polled yet. Fyers is queried during market hours and periodically while the market is closed.');
 }
