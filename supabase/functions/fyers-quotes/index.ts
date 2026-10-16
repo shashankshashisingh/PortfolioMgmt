@@ -76,7 +76,7 @@ async function getAccessToken(forceRefresh = false): Promise<string> {
     access_expires_at: nextSixAmIst(),
     updated_at: new Date().toISOString(),
   };
-  if (body.refresh_token) {
+  if (body.refresh_token && body.refresh_token !== row.refresh_token) {
     update.refresh_token = body.refresh_token;
     update.refresh_expires_at = new Date(Date.now() + 14 * 86400000).toISOString();
   }
