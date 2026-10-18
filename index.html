@@ -2180,7 +2180,7 @@ $('#txnForm').addEventListener('submit',e=>{
   afterDataChange();
   $('#fQty').value='';$('#fPrice').value='';$('#fCur').value='';
   const notional=qty*price;
-  msg(M,({BUY:'Bought ',SELL:'Sold ',SHORT:'Short sold ',COVER:'Covered '}[type]||'Traded ')+qty+' '+sym+' at '+inr(price,2)+' ('+inr(notional,2)+' notional)'+(type==='SHORT'?' · margin required at 115% ('+inr(notional*1.15)+')':'')+(typedPrice===''?' using '+market.source+'.':'.'),'ok');
+  msg(M,({BUY:'Bought ',SELL:'Sold ',SHORT:'Short sold ',COVER:'Covered '}[type]||'Traded ')+qty+' '+sym+' at '+inr(price,2)+' ('+inr(notional,2)+' notional)'+(type==='SHORT'?' · margin required at 115% ('+inr(notional*1.15)+')':'')+(typedPrice===''?' using '+historical.source+'.':'.'),'ok');
   updateTradeNotional();
   renderAll();
 });
