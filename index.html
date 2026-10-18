@@ -1640,10 +1640,10 @@ function renderBorrowTab(){
   $('#borrowTable').innerHTML=rows.length?'<table><thead><tr><th>Borrow date</th><th>Symbol</th><th class="n">Borrowed</th><th>Eligible from</th><th class="n">Available to short</th><th class="n">Borrow price</th><th class="n">Margin blocked</th><th>Action</th></tr></thead><tbody>'+body+'</tbody></table>':'<div class="empty">No paper borrowings for this fund yet. Borrow shares above to reserve margin.</div>';
 }
 function updateBorrowPreview(){
-  const sym=$('#bSym').value.trim().toUpperCase(),qty=Number($('#bQty').value),typed=$('#bPrice').value.trim(),market=typed===''?marketPriceFor(sym):null,price=typed===''?(market&&market.price):Number(typed);
+  const sym=$('#bSym').value.trim().toUpperCase(),date=$('#bDate').value,qty=Number($('#bQty').value),typed=$('#bPrice').value.trim(),hist=typed===''?historicalPriceFor(sym,date):null,price=typed===''?(hist&&hist.price):Number(typed);
   const valid=Number.isFinite(qty)&&qty>0&&Number.isFinite(price)&&price>0;
   $('#borrowMarginPreview').textContent=valid?inr(qty*price*1.15,2):'—';
-  $('#borrowPriceHint').textContent=typed!==''?'Quantity × entered borrow price × 115%':(valid?'Quantity × market price × 115% ('+market.source+')':'Enter a symbol and quantity; market price is used if price is blank.');
+  $('#borrowPriceHint').textContent=typed!==''?'Quantity × entered borrow price × 115% (manual override)':(valid?'Quantity × '+hist.source+' × 115%':'Select a symbol and borrow date with historical price data; no current-price fallback is used.');
 }
 function renderData(){
   // The custom feed URL input was removed when the app switched to repository data + FYERS.
@@ -2098,15 +2098,28 @@ function marketPriceFor(sym){
   }
   return null;
 }
+function historicalPriceFor(sym,date){
+  const key=String(sym||'').trim().toUpperCase(),day=String(date||'').slice(0,10),series=S.series[key];
+  if(!key||!/^\d{4}-\d{2}-\d{2}$/.test(day)||day>istNow().date||!series||!Array.isArray(series.d)||!Array.isArray(series.c))return null;
+  let best=null;
+  for(let i=0;i<series.d.length;i++){
+    const d=String(series.d[i]||'').slice(0,10),p=Number(series.c[i]);
+    if(d&&d<=day&&Number.isFinite(p)&&p>0&&(!best||d>best.date))best={price:p,date:d};
+  }
+  if(!best)return null;
+  const age=(Date.parse(day+'T00:00:00Z')-Date.parse(best.date+'T00:00:00Z'))/86400000;
+  if(age>7)return null;
+  return {...best,source:best.date===day?'historical close for selected date':'last available trading close ('+best.date+')'};
+}
 function updateTradeNotional(){
-  const sym=$('#fSym').value.trim().toUpperCase(),qty=Number($('#fQty').value),typed=$('#fPrice').value.trim();
-  const resolved=typed!==''?Number(typed):(marketPriceFor(sym)?.price);
+  const sym=$('#fSym').value.trim().toUpperCase(),date=$('#fDate').value,qty=Number($('#fQty').value),typed=$('#fPrice').value.trim(),hist=typed===''?historicalPriceFor(sym,date):null;
+  const resolved=typed!==''?Number(typed):(hist&&hist.price);
   const valid=Number.isFinite(qty)&&qty>0&&Number.isFinite(resolved)&&resolved>0;
   $('#tradeNotional').textContent=valid?inr(qty*resolved,2):'—';
-  $('#tradeValueHint').textContent=typed!==''?'Quantity × entered trade price':(valid?'Quantity × market price ('+(marketPriceFor(sym)?.source||'available price')+')':'Enter a symbol and quantity; market price is used if trade price is blank.');
+  $('#tradeValueHint').textContent=typed!==''?'Quantity × entered trade price (manual override)':(valid?'Quantity × '+hist.source:'Select a symbol and trade date with historical price data; no current-price fallback is used.');
 }
-['fSym','fQty','fPrice','fType'].forEach(id=>$('#'+id).addEventListener('input',updateTradeNotional));
-['fSym','fPrice'].forEach(id=>$('#'+id).addEventListener('change',updateTradeNotional));
+['fSym','fQty','fPrice','fType','fDate'].forEach(id=>$('#'+id).addEventListener('input',updateTradeNotional));
+['fSym','fPrice','fDate'].forEach(id=>$('#'+id).addEventListener('change',updateTradeNotional));
 function updateAvailableQuantity(){
   const fund=$('#fFund').value,type=$('#fType').value,sym=$('#fSym').value.trim().toUpperCase();
   const qty=$('#fQty'),hint=$('#fQtyAvailable'),portfolioHint=$('#fPortfolioQty');
@@ -2132,10 +2145,10 @@ $('#txnForm').addEventListener('submit',e=>{
   e.preventDefault();
   let fund=$('#fFund').value;
   const date=$('#fDate').value,type=$('#fType').value,sym=$('#fSym').value.trim().toUpperCase(),qty=parseFloat($('#fQty').value),typedPrice=$('#fPrice').value.trim(),cur=parseFloat($('#fCur').value);
-  const market=typedPrice===''?marketPriceFor(sym):null;
-  const price=typedPrice===''?(market?market.price:NaN):Number(typedPrice);
+  const historical=typedPrice===''?historicalPriceFor(sym,date):null;
+  const price=typedPrice===''?(historical?historical.price:NaN):Number(typedPrice);
   const M=$('#txnMsg');
-  if(!date||!sym||!(qty>0)||!(price>0)||!Number.isFinite(price)){msg(M,typedPrice===''?'No market price is available for '+sym+'. Enter a trade price or load price data first.':'Enter a date, symbol, positive quantity and a valid positive price.','err');return}
+  if(!date||!sym||!(qty>0)||!(price>0)||!Number.isFinite(price)){msg(M,typedPrice===''?'No historical close is available for '+sym+' on or shortly before '+fmtD(date)+'. Load historical price data or enter an explicit price override.':'Enter a date, symbol, positive quantity and a valid positive price.','err');return}
   if(S.mode==='demo'){ensureUser()}
   if(!S.funds.some(f=>f.id===fund))fund=S.funds[0].id;
   const fundTx=S.txns.filter(t=>t.fund===fund),book=processTxns(fundTx),b=book[sym]||{lots:[],shortLots:[]};
@@ -2171,14 +2184,14 @@ $('#txnForm').addEventListener('submit',e=>{
   updateTradeNotional();
   renderAll();
 });
-['bSym','bQty','bPrice'].forEach(id=>$('#'+id).addEventListener('input',updateBorrowPreview));
-['bSym','bPrice'].forEach(id=>$('#'+id).addEventListener('change',updateBorrowPreview));
+['bSym','bQty','bPrice','bDate'].forEach(id=>$('#'+id).addEventListener('input',updateBorrowPreview));
+['bSym','bPrice','bDate'].forEach(id=>$('#'+id).addEventListener('change',updateBorrowPreview));
 $('#bFund').addEventListener('change',()=>{renderBorrowTab();updateBorrowPreview()});
 $('#borrowForm').addEventListener('submit',e=>{
   e.preventDefault();
   if(S.mode==='demo'){msg($('#borrowMsg'),'This is the example portfolio. Import your holdings or start empty before borrowing shares.','err');return}
-  const fund=$('#bFund').value,date=$('#bDate').value,symbol=$('#bSym').value.trim().toUpperCase(),qty=Number($('#bQty').value),typed=$('#bPrice').value.trim(),market=typed===''?marketPriceFor(symbol):null,price=typed===''?(market&&market.price):Number(typed);
-  if(!fund||!date||!symbol||!(qty>0)||!Number.isFinite(price)||price<=0){msg($('#borrowMsg'),typed===''?'Enter a fund, borrow date, symbol and quantity; a market price must be available.':'Enter a valid fund, date, symbol, quantity and positive price.','err');return}
+  const fund=$('#bFund').value,date=$('#bDate').value,symbol=$('#bSym').value.trim().toUpperCase(),qty=Number($('#bQty').value),typed=$('#bPrice').value.trim(),historical=typed===''?historicalPriceFor(symbol,date):null,price=typed===''?(historical&&historical.price):Number(typed);
+  if(!fund||!date||!symbol||!(qty>0)||!Number.isFinite(price)||price<=0){msg($('#borrowMsg'),typed===''?'No historical close is available for '+symbol+' on or shortly before '+fmtD(date)+'. Load historical price data or enter an explicit price override.':'Enter a valid fund, date, symbol, quantity and positive price.','err');return}
   const margin=qty*price*1.15,book=processTxns(S.txns.filter(t=>t.fund===fund));
   const shortMargin=sum(Object.keys(book).map(k=>sum((book[k].shortLots||[]).map(l=>l.qty))*((marketPriceFor(k)||{}).price||price)*1.15));
   const availableCash=fundCashNow(fund)-shortMargin-borrowUnusedMargin(fund);
@@ -2187,7 +2200,7 @@ $('#borrowForm').addEventListener('submit',e=>{
   if(!S.meta[symbol])S.meta[symbol]={name:(FEED.dir[symbol]&&FEED.dir[symbol].n)||symbol,cls:'Equities',sector:''};
   if(!S.series[symbol])S.series[symbol]={d:[date],c:[price]};
   save();renderAll();$('#bFund').value=fund;renderBorrowTab();$('#bQty').value='';$('#bPrice').value='';
-  msg($('#borrowMsg'),'Paper-borrowed '+nm(qty,3)+' '+symbol+' for '+fundName(fund)+'. '+inr(margin)+' margin is now blocked. Eligible to short from '+fmtD(addTradingDays(date,2))+'.'+(typed===''?' Used '+market.source+'.':''),'ok');updateBorrowPreview();
+  msg($('#borrowMsg'),'Paper-borrowed '+nm(qty,3)+' '+symbol+' for '+fundName(fund)+'. '+inr(margin)+' margin is now blocked. Eligible to short from '+fmtD(addTradingDays(date,2))+'.'+(typed===''?' Used '+historical.source+'.':''),'ok');updateBorrowPreview();
 });
 $('#borrowTable').addEventListener('click',e=>{
   const btn=e.target.closest('[data-return-borrow]');if(!btn)return;
