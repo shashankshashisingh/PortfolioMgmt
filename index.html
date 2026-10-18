@@ -422,7 +422,7 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
           <label class="fl">Name<input id="fName" placeholder="Reliance Industries"></label>
           <label class="fl">Asset class<select id="fCls"></select></label>
           <label class="fl">Quantity / units<input type="number" id="fQty" step="any" min="0" required><span class="note" id="fQtyAvailable" aria-live="polite">Available shares will appear when you select a symbol and trade side.</span></label>
-          <label class="fl">Trade price (₹)<input type="number" id="fPrice" step="any" min="0" placeholder="Blank = market price"></label>
+          <label class="fl">Trade price (₹)<input type="number" id="fPrice" step="any" min="0" placeholder="Blank = historical close for date"></label>
           <label class="fl">Current price (₹)<input type="number" id="fCur" step="any" min="0" placeholder="optional"><span class="note" id="fPortfolioQty" aria-live="polite">Portfolio shares: —</span></label>
           <div class="fl" style="grid-column:1/-1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:12px"><span><b>Notional trade value</b><span class="note" id="tradeValueHint" style="display:block;margin:2px 0 0">Quantity × trade price</span></span><b class="mono" id="tradeNotional">—</b></div>
           <button class="btn ghost" type="button" id="fLookup">Look up symbol</button>
@@ -460,8 +460,8 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
         <label class="fl">Borrow date<input type="date" id="bDate" required></label>
         <label class="fl">Symbol / ticker<input id="bSym" list="symList" placeholder="e.g. RELIANCE" autocapitalize="characters" spellcheck="false" required></label>
         <label class="fl">Quantity<input id="bQty" type="number" min="0.001" step="any" required></label>
-        <label class="fl">Borrow price (₹)<input id="bPrice" type="number" min="0.01" step="any" placeholder="Blank = market price"></label>
-        <div class="fl"><span class="lbl">Margin to block</span><div class="v" id="borrowMarginPreview">—</div><span class="note" id="borrowPriceHint">Quantity × price × 115%</span></div>
+        <label class="fl">Borrow price (₹)<input id="bPrice" type="number" min="0.01" step="any" placeholder="Blank = historical close for date"></label>
+        <div class="fl"><span class="lbl">Margin to block</span><div class="v" id="borrowMarginPreview">—</div><span class="note" id="borrowPriceHint">Quantity × historical close for selected borrow date × 115%</span></div>
         <button class="btn" type="submit">Borrow shares (paper)</button>
       </form>
       <div class="msg" id="borrowMsg" role="status" aria-live="polite"></div>
