@@ -545,8 +545,19 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
         <button class="btn" type="button" id="bhavLoad" style="flex:0 0 auto">Load date</button>
         <button class="btn ghost" type="button" id="bhavDownload" style="flex:0 0 auto" disabled>Download JSON</button>
       </div>
-      <p class="note" id="bhavArchiveStatus" role="status" aria-live="polite">Loading archive dates…</p>
+      <p class="note" id="bhavArchiveStatus" role="status" aria-live="polite">Open this tab to load archived dates.</p>
+      <div class="cols" style="align-items:center;margin:10px 0">
+        <label style="flex:1 1 240px">Search symbol or company
+          <input id="bhavSearch" type="search" placeholder="e.g. RELIANCE or Tata" autocomplete="off" style="display:block;width:100%;margin-top:5px">
+        </label>
+        <span class="note" id="bhavPageStatus" aria-live="polite">No data loaded</span>
+      </div>
       <div style="overflow:auto;max-height:440px" id="bhavArchiveResults"></div>
+      <div class="cols" style="justify-content:space-between;align-items:center;margin-top:10px">
+        <button class="btn ghost" type="button" id="bhavPrev" disabled>Previous</button>
+        <span class="note" id="bhavPageLabel">Page 0 of 0</span>
+        <button class="btn ghost" type="button" id="bhavNext" disabled>Next</button>
+      </div>
     </div>
     <div class="panel">
       <h2>Import</h2>
@@ -1673,6 +1684,7 @@ function setTab(t){
   document.querySelectorAll('main,section[id^="tab-"]').forEach(s=>{if(s.id)s.hidden=s.id!=='tab-'+t});
   try{history.replaceState(null,'','#'+t)}catch(e){}
   renderFundbar();renderPeriod();renderTabContent();
+  if(t==='data')loadBhavArchiveIndex();
 }
 
 /* ---------- CSV ---------- */
@@ -1997,25 +2009,54 @@ function hostKind(){
   return 'file';
 }
 async function getJSON(u){const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
-let BHAV_ARCHIVE={dates:[]},BHAV_CURRENT=null;
+let BHAV_ARCHIVE={dates:[]},BHAV_CURRENT=null,BHAV_ARCHIVE_LOADED=false,BHAV_ARCHIVE_LOADING=null;
+const BHAV_CACHE=new Map(),BHAV_PAGE_SIZE=100;
+let bhavPage=0;
 async function loadBhavArchiveIndex(){
  const status=$('#bhavArchiveStatus'),select=$('#bhavDate');if(!status||!select)return;
- try{BHAV_ARCHIVE=await getJSON('data/bhavcopy-index.json');const dates=[...(BHAV_ARCHIVE.dates||[])].sort().reverse();
- select.innerHTML=dates.map(d=>'<option value="'+esc(d)+'">'+esc(d)+'</option>').join('');
- status.textContent=dates.length+' trading days archived. Latest: '+(BHAV_ARCHIVE.latestDate||'—')+'. Select a date to view or download.';
- if(dates.length)showBhavArchive();
- else status.textContent='No archived dates yet. The daily workflow will add the next available trading day.';
- }catch(e){status.textContent='Could not load archive index ('+e.message+'). It will appear after the workflow creates its first index.'}
+ if(BHAV_ARCHIVE_LOADED){if(!BHAV_CURRENT&&select.value)showBhavArchive();return}
+ if(BHAV_ARCHIVE_LOADING)return BHAV_ARCHIVE_LOADING;
+ BHAV_ARCHIVE_LOADING=(async()=>{
+  status.textContent='Loading archive dates…';
+  try{
+   BHAV_ARCHIVE=await getJSON('data/bhavcopy-index.json');
+   const dates=[...(BHAV_ARCHIVE.dates||[])].sort().reverse();
+   select.innerHTML=dates.map(d=>'<option value="'+esc(d)+'">'+esc(d)+'</option>').join('');
+   BHAV_ARCHIVE_LOADED=true;
+   if(dates.length){status.textContent=dates.length+' trading days archived. Latest: '+(BHAV_ARCHIVE.latestDate||'—')+'.';await showBhavArchive()}
+   else status.textContent='No archived dates yet. The daily workflow will add the next available trading day.';
+  }catch(e){status.textContent='Could not load archive index ('+e.message+'). Try opening the DATA tab again.'}
+  finally{BHAV_ARCHIVE_LOADING=null}
+ })();
+ return BHAV_ARCHIVE_LOADING;
+}
+function renderBhavArchiveRows(){
+ const results=$('#bhavArchiveResults'),search=($('#bhavSearch')?.value||'').trim().toLocaleLowerCase();
+ const prev=$('#bhavPrev'),next=$('#bhavNext'),label=$('#bhavPageLabel'),pageStatus=$('#bhavPageStatus');
+ if(!results)return;
+ if(!BHAV_CURRENT||!Array.isArray(BHAV_CURRENT.rows)){results.innerHTML='';if(pageStatus)pageStatus.textContent='No data loaded';if(label)label.textContent='Page 0 of 0';if(prev)prev.disabled=true;if(next)next.disabled=true;return}
+ const filtered=BHAV_CURRENT.rows.filter(r=>!search||String(r.symbol||'').toLocaleLowerCase().includes(search)||String(r.name||'').toLocaleLowerCase().includes(search));
+ const pages=Math.max(1,Math.ceil(filtered.length/BHAV_PAGE_SIZE));bhavPage=Math.max(0,Math.min(bhavPage,pages-1));
+ const rows=filtered.slice(bhavPage*BHAV_PAGE_SIZE,(bhavPage+1)*BHAV_PAGE_SIZE);
+ const body=rows.map(r=>'<tr><td>'+esc(r.symbol)+'</td><td>'+esc(r.name||r.symbol)+'</td><td>'+esc(r.series)+'</td><td style="text-align:right">'+(Number(r.close)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td><td style="text-align:right">'+(Number.isFinite(Number(r.previousClose))?Number(r.previousClose).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'—')+'</td></tr>').join('');
+ results.innerHTML='<table><thead><tr><th>Symbol</th><th>Company</th><th>Series</th><th style="text-align:right">Close (₹)</th><th style="text-align:right">Previous close (₹)</th></tr></thead><tbody>'+body+'</tbody></table>';
+ if(pageStatus)pageStatus.textContent=filtered.length+' matching securities';
+ if(label)label.textContent='Page '+(bhavPage+1)+' of '+pages;
+ if(prev)prev.disabled=bhavPage===0;
+ if(next)next.disabled=bhavPage>=pages-1;
 }
 async function showBhavArchive(){
  const date=$('#bhavDate')?.value;if(!date)return;
- const status=$('#bhavArchiveStatus'),results=$('#bhavArchiveResults'),download=$('#bhavDownload');
- status.textContent='Loading NSE Bhavcopy for '+date+'…';results.innerHTML='';download.disabled=true;BHAV_CURRENT=null;
- try{const data=await getJSON('data/bhavcopy/'+encodeURIComponent(date)+'.json');if(!Array.isArray(data.rows))throw new Error('Unexpected archive format');
- BHAV_CURRENT=data;download.disabled=false;status.textContent=date+' · '+data.rows.length+' securities · archived '+(data.savedAt?new Date(data.savedAt).toLocaleString('en-IN'):'date unavailable');
- const body=data.rows.map(r=>'<tr><td>'+esc(r.symbol)+'</td><td>'+esc(r.name||r.symbol)+'</td><td>'+esc(r.series)+'</td><td style="text-align:right">'+(Number(r.close)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td><td style="text-align:right">'+(Number.isFinite(Number(r.previousClose))?Number(r.previousClose).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'—')+'</td></tr>').join('');
- results.innerHTML='<table><thead><tr><th>Symbol</th><th>Company</th><th>Series</th><th style="text-align:right">Close (₹)</th><th style="text-align:right">Previous close (₹)</th></tr></thead><tbody>'+body+'</tbody></table>';
- }catch(e){status.textContent='Could not load '+date+': '+e.message;results.innerHTML=''}
+ const status=$('#bhavArchiveStatus'),download=$('#bhavDownload');if(!status)return;
+ bhavPage=0;status.textContent='Loading NSE Bhavcopy for '+date+'…';$('#bhavArchiveResults').innerHTML='';download.disabled=true;BHAV_CURRENT=null;
+ try{
+  let data=BHAV_CACHE.get(date);
+  if(!data){data=await getJSON('data/bhavcopy/'+encodeURIComponent(date)+'.json');if(!Array.isArray(data.rows))throw new Error('Unexpected archive format');BHAV_CACHE.set(date,data)}
+  if($('#bhavDate')?.value!==date)return;
+  BHAV_CURRENT=data;download.disabled=false;
+  status.textContent=date+' · '+data.rows.length+' securities · archived '+(data.savedAt?new Date(data.savedAt).toLocaleString('en-IN'):'date unavailable');
+  renderBhavArchiveRows();
+ }catch(e){status.textContent='Could not load '+date+': '+e.message;$('#bhavArchiveResults').innerHTML='';$('#bhavPageStatus').textContent='Could not load data'}
 }
 function downloadBhavArchive(){
  if(!BHAV_CURRENT)return;const blob=new Blob([JSON.stringify(BHAV_CURRENT,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
@@ -2345,10 +2386,12 @@ compute();renderStatus();renderBanner();fillSymbolLists();
 setTab(startTab);
 startFeed();
 loadRepoData();
-loadBhavArchiveIndex();
 $('#bhavLoad').addEventListener('click',showBhavArchive);
 $('#bhavDate').addEventListener('change',showBhavArchive);
 $('#bhavDownload').addEventListener('click',downloadBhavArchive);
+$('#bhavSearch').addEventListener('input',()=>{bhavPage=0;renderBhavArchiveRows()});
+$('#bhavPrev').addEventListener('click',()=>{if(bhavPage>0){bhavPage--;renderBhavArchiveRows()}});
+$('#bhavNext').addEventListener('click',()=>{bhavPage++;renderBhavArchiveRows()});
 let lastHeavy=0;
 setInterval(()=>{
   const ist=istNow();
