@@ -1,8 +1,8 @@
-name: Update AMFI mutual fund NAVs
+name: Update MFapi mutual fund NAVs
 
 on:
   schedule:
-    # Run after AMFI's daily NAV publication window (02:00 IST).
+    # MFapi updates NAV data multiple times daily; this is a daily cache refresh.
     - cron: "30 20 * * *"
   workflow_dispatch:
   push:
@@ -21,7 +21,7 @@ concurrency:
 jobs:
   nav:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,13 +29,13 @@ jobs:
           node-version: 20
       - run: node tests/mf-nav.test.js
       - run: node scripts/fetch-mf-nav.mjs
-      - name: Commit latest AMFI NAV file
+      - name: Commit latest MFapi NAV file
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/mf-nav.json
           if ! git diff --cached --quiet; then
-            git commit -m "Update AMFI mutual fund NAVs"
+            git commit -m "Update MFapi mutual fund NAVs"
             for i in 1 2 3; do
               git pull --rebase origin main && git push && exit 0
               sleep 5
