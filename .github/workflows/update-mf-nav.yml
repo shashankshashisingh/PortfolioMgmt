@@ -1,0 +1,46 @@
+name: Update AMFI mutual fund NAVs
+
+on:
+  schedule:
+    # Run after AMFI's daily NAV publication window (02:00 IST).
+    - cron: "30 20 * * *"
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/fetch-mf-nav.mjs"
+      - "tests/mf-nav.test.js"
+      - ".github/workflows/update-mf-nav.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-mf-nav
+  cancel-in-progress: false
+
+jobs:
+  nav:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node tests/mf-nav.test.js
+      - run: node scripts/fetch-mf-nav.mjs
+      - name: Commit latest AMFI NAV file
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/mf-nav.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update AMFI mutual fund NAVs"
+            for i in 1 2 3; do
+              git pull --rebase origin main && git push && exit 0
+              sleep 5
+            done
+            exit 1
+          else
+            echo "No NAV changes to commit."
+          fi
