@@ -1296,7 +1296,7 @@ function fillSymbolLists(){
   if(fillSymbolLists.sig!==sig){
     fillSymbolLists.sig=sig;
     const symbolOptions=[...symSet].sort().map(s=>{const n=((S.meta[s]||{}).name)||(FEED.dir[s]&&FEED.dir[s].n)||(FEED.mf&&FEED.mf.schemes&&FEED.mf.schemes[s]&&FEED.mf.schemes[s].name)||'';return '<option value="'+esc(s)+'" label="'+esc(s+(n?' — '+n:''))+'"></option>'});
-    const mfOptions=Object.entries(FEED.mf&&FEED.mf.schemes||{}).map(([code,scheme])=>'<option value="'+esc(scheme.name)+'" label="Mutual Fund · AMFI code '+esc(code)+'"></option>');
+    const mfOptions=Object.entries(FEED.mf&&FEED.mf.schemes||{}).map(([code,scheme])=>'<option value="'+esc(scheme.name)+'" label="Mutual Fund · scheme code '+esc(code)+'"></option>');
     $('#symList').innerHTML=[...symbolOptions,...mfOptions].join('');
   }
   const bk=processTxns(S.txns);
@@ -2156,7 +2156,7 @@ function renderRepoStatus(){
   el.innerHTML=
     line(fyersStatusKind==='ok','FYERS connection',esc(fyersStatusText))+
     line(pOk,'Bhavcopy snapshot / archive',pOk?REPO.priceCount+' symbols, updated '+ago(REPO.priceUpdated)+'. Historical/reference data only; not used as the current quote.':(REPO.priceErr?'could not read data/prices.json ('+esc(REPO.priceErr)+')':'data/prices.json is empty. In your repo, open Actions and run "Update NSE Bhavcopy".'))+
-    line(!!(FEED.mf&&Object.keys(FEED.mf.schemes||{}).length),'AMFI mutual-fund NAVs',FEED.mf?Object.keys(FEED.mf.schemes||{}).length.toLocaleString('en-IN')+' schemes, updated '+ago(FEED.mf.updated)+'. NAVs are daily, not live.':('Could not load data/mf-nav.json'+(REPO.mfErr?' ('+esc(REPO.mfErr)+')':'')))+
+    line(!!(FEED.mf&&Object.keys(FEED.mf.schemes||{}).length),'MFapi mutual-fund NAVs',FEED.mf?Object.keys(FEED.mf.schemes||{}).length.toLocaleString('en-IN')+' schemes, updated '+ago(FEED.mf.updated)+'. NAVs are daily, not live.':('Could not load data/mf-nav.json'+(REPO.mfErr?' ('+esc(REPO.mfErr)+')':'')))+
     line(REPO.dirCount>0,'Symbol list',REPO.dirCount>0?REPO.dirCount.toLocaleString('en-IN')+' symbols for lookup':(REPO.dirErr?'could not read data/directory.json ('+esc(REPO.dirErr)+')':'not built yet. It is created by the "Update NSE Bhavcopy" run.'))+
     line(REPO.histCount>0,'Price history',REPO.histCount>0?REPO.histCount+' series, updated '+ago(REPO.histUpdated):(REPO.histErr?'could not read data/history.json ('+esc(REPO.histErr)+')':'empty. Run "Update NSE Bhavcopy" in Actions to append closing prices; historical data feeds statistics and benchmark tabs.'))+
     (bulkBlocked?'<p class="note">NSE refuses the bulk quote call from GitHub, so live prices come one symbol at a time and only for symbols listed in <span class="mono">symbols.json</span>. Today\'s benchmark level is also missing, so benchmark statistics stop at the last close.</p>':'')+
