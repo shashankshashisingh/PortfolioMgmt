@@ -33,7 +33,7 @@ Bhavcopy is end-of-day data, not an intraday real-time quote feed. The dashboard
 The separate historical backfill workflow (`.github/workflows/update-history.yml`) supplements older history; it does not supply current dashboard prices or the symbol directory.
 
 
-**Mutual fund NAVs (AMFI):** The `Update AMFI mutual fund NAVs` workflow downloads MFapi.in's free JSON API and publishes `data/mf-nav.json`. When a transaction symbol matches an MFapi scheme code, the app recognises it as a Mutual Fund, offers its scheme name in symbol suggestions, and uses the latest published NAV for valuation. NAVs are daily published values, not intraday quotes. Search for a scheme by its MFapi scheme code (the code is the transaction symbol); the scheme name is shown beside it. The feed is refreshed once daily by GitHub Actions and can also be run manually from the Actions tab. No API key is required. The API supports scheme-name search and latest-NAV endpoints; the workflow caches results locally to reduce requests.
+**Mutual fund NAVs (MFapi.in):** The `Update MFapi mutual fund NAVs` workflow downloads scheme metadata and latest NAVs from MFapi.in's free JSON API and publishes `data/mf-nav.json`. When a transaction symbol matches an MFapi scheme code, the app recognises it as a Mutual Fund, offers its scheme name in symbol suggestions, and uses the latest published NAV for valuation. NAVs are daily published values, not intraday quotes. Search for a scheme by its scheme code (the code is the transaction symbol); the scheme name is shown beside it. The feed is refreshed once daily by GitHub Actions and can also be run manually from the Actions tab. No API key is required. The API supports scheme-name search and latest-NAV endpoints; the workflow caches results locally to reduce requests.
 
 **ETFs:** NSE-listed ETFs are already included in the existing NSE CM Bhavcopy directory and daily closing-price history when they appear in the cash-market archive. Their prices are end-of-day closes, not real-time quotes. ETFs that are not in the NSE cash-market Bhavcopy need a manual price or another supported quote feed.
 
@@ -41,7 +41,7 @@ The separate historical backfill workflow (`.github/workflows/update-history.yml
 
 | Workflow | Schedule | Purpose |
 |---|---|---|
-| Update AMFI mutual fund NAVs | Daily at 02:00 IST, manually, or when its code/config changes | Download AMFI daily NAV file for all schemes |
+| Update MFapi mutual fund NAVs | Daily at 02:00 IST or manually | Cache MFapi.in scheme catalog and latest NAVs in `data/mf-nav.json` |
 | Update NSE Bhavcopy | Weekdays at 18:00 IST (12:30 UTC), manually, or when its code/config changes | Primary price file, symbol directory, cached Bhavcopy and history merge |
 | Update price history | Weekdays at 17:00 IST (11:30 UTC), manually, or when its code/config changes | Supplemental historical backfill |
 
