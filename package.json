@@ -6,8 +6,10 @@
     "prices": "npm run fetch:bhavcopy",
     "fetch:bhavcopy": "node scripts/fetch-bhavcopy.mjs",
     "bhavcopy": "node mcp/server.js",
-    "test": "node tests/core.test.js",
-    "test:bhavcopy": "node tests/bhavcopy.test.js"
+    "test": "node tests/core.test.js && node tests/bhavcopy.test.js && node tests/mf-nav.test.js",
+    "test:bhavcopy": "node tests/bhavcopy.test.js",
+    "fetch:mf-nav": "node scripts/fetch-mf-nav.mjs",
+    "test:mf-nav": "node tests/mf-nav.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
