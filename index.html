@@ -1295,7 +1295,7 @@ function fillSymbolLists(){
   const sig=symSet.size+':'+Object.keys(S.series).length+':'+Object.keys(FEED.mf&&FEED.mf.schemes||{}).length;
   if(fillSymbolLists.sig!==sig){
     fillSymbolLists.sig=sig;
-    $('#symList').innerHTML=[...symSet].sort().map(s=>{const n=((S.meta[s]||{}).name)||(FEED.dir[s]&&FEED.dir[s].n)||'';return '<option value="'+esc(s)+'" label="'+esc(s+(n?' — '+n:''))+'"></option>'}).join('');
+    $('#symList').innerHTML=[...symSet].sort().map(s=>{const n=((S.meta[s]||{}).name)||(FEED.dir[s]&&FEED.dir[s].n)||(FEED.mf&&FEED.mf.schemes&&FEED.mf.schemes[s]&&FEED.mf.schemes[s].name)||'';return '<option value="'+esc(s)+'" label="'+esc(s+(n?' — '+n:''))+'"></option>'}).join('');
   }
   const bk=processTxns(S.txns);
   const held=Object.keys(bk).filter(s=>Math.abs(sum(bk[s].lots.map(l=>l.qty))-sum((bk[s].shortLots||[]).map(l=>l.qty)))>1e-9).sort();
