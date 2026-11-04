@@ -1951,11 +1951,16 @@ document.addEventListener('change',e=>{
   if(t.dataset&&t.dataset.target!==undefined){const v=parseFloat(t.value);const TG=S.targets[S.view]||(S.targets[S.view]={});if(isFinite(v))TG[t.dataset.target]=v;else delete TG[t.dataset.target];save();renderRebalance()}
 });
 $('#fCls').innerHTML=CLASSES.map(c=>'<option>'+c+'</option>').join('');
+const liveMfMatches=new Map();
+let mfSearchTimer=null,mfSearchRequest=0;
 function resolveMutualFundName(value){
   const q=String(value||'').trim().toLocaleLowerCase();
   if(!q)return null;
   const entries=Object.entries(FEED.mf&&FEED.mf.schemes||{});
-  return entries.find(([,scheme])=>String(scheme.name||'').trim().toLocaleLowerCase()===q)||null;
+  const cached=entries.find(([,scheme])=>String(scheme.name||'').trim().toLocaleLowerCase()===q);
+  if(cached)return cached;
+  for(const [code,scheme] of liveMfMatches){if(String(scheme.name||'').trim().toLocaleLowerCase()===q)return [code,scheme]}
+  return null;
 }
 function applyMutualFundSelection(code,scheme){
   $('#fSym').value=code;
@@ -1964,6 +1969,38 @@ function applyMutualFundSelection(code,scheme){
   const nav=Number(scheme.nav);
   if(nav>0&&!$('#fCur').value)$('#fCur').value=nav;
 }
+$('#fSym').addEventListener('input',e=>{
+  const query=e.target.value.trim();
+  clearTimeout(mfSearchTimer);
+  if(query.length<2)return;
+  mfSearchTimer=setTimeout(async()=>{
+    const request=++mfSearchRequest;
+    try{
+      const response=await fetch('https://api.mfapi.in/mf/search?q='+encodeURIComponent(query),{headers:{Accept:'application/json'}});
+      if(!response.ok)throw new Error('HTTP '+response.status);
+      const results=await response.json();
+      if(request!==mfSearchRequest||!Array.isArray(results))return;
+      liveMfMatches.clear();
+      const options=[];
+      for(const item of results.slice(0,30)){
+        const code=String(item.schemeCode??item.scheme_code??'');
+        const name=String(item.schemeName??item.scheme_name??'').trim();
+        if(!/^\d+$/.test(code)||!name)continue;
+        const cached=FEED.mf&&FEED.mf.schemes&&FEED.mf.schemes[code]||{};
+        const scheme={...cached,name,nav:cached.nav??null,date:cached.date||''};
+        liveMfMatches.set(code,scheme);
+        options.push('<option value="'+esc(name)+'" label="Mutual Fund · scheme code '+esc(code)+'"></option>');
+      }
+      const symbols=[...new Set(Object.keys(S.series).concat(Object.keys(FEED.dir||{})))].sort().map(sym=>{
+        const name=(S.meta[sym]&&S.meta[sym].name)||(FEED.dir[sym]&&FEED.dir[sym].n)||'';
+        return '<option value="'+esc(sym)+'" label="'+esc(sym+(name?' — '+name:''))+'"></option>';
+      });
+      $('#symList').innerHTML=[...symbols,...options].join('');
+    }catch(err){
+      // Keep manual transaction entry available if the remote search is temporarily unavailable.
+    }
+  },250);
+});
 $('#fSym').addEventListener('input',e=>{
   const raw=e.target.value.trim(),matched=resolveMutualFundName(raw);
   if(matched){applyMutualFundSelection(matched[0],matched[1]);return}
