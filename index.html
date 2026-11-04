@@ -1950,8 +1950,21 @@ document.addEventListener('change',e=>{
 });
 $('#fCls').innerHTML=CLASSES.map(c=>'<option>'+c+'</option>').join('');
 $('#fSym').addEventListener('input',e=>{
-  const s=e.target.value.trim().toUpperCase(),m=S.meta[s];
-  if(m){if(!$('#fName').value)$('#fName').value=m.name||'';if(CLASSES.includes(m.cls))$('#fCls').value=m.cls}
+  const s=e.target.value.trim().toUpperCase(),m=S.meta[s],mf=FEED.mf&&FEED.mf.schemes&&FEED.mf.schemes[s],d=FEED.dir&&FEED.dir[s];
+  if(mf){
+    $('#fName').value=mf.name||$('#fName').value;
+    $('#fCls').value='Mutual Funds';
+    const nav=Number(mf.nav);
+    if(nav>0&&!$('#fCur').value)$('#fCur').value=nav;
+  }else if(d&&normClass(d.c)==='ETFs'){
+    if(!$('#fName').value)$('#fName').value=d.n||'';
+    $('#fCls').value='ETFs';
+    const quote=FEED.raw&&FEED.raw.prices&&FEED.raw.prices[s];
+    if(quote&&Number(quote.ltp)>0&&!$('#fCur').value)$('#fCur').value=Number(quote.ltp);
+  }else if(m){
+    if(!$('#fName').value)$('#fName').value=m.name||'';
+    if(CLASSES.includes(m.cls))$('#fCls').value=m.cls;
+  }
 });
 const lookedUp={};
 function localLookup(sym){
@@ -2218,8 +2231,9 @@ $('#txnForm').addEventListener('submit',e=>{
   const old=S.meta[sym]||{};
   S.meta[sym]={name:$('#fName').value.trim()||old.name||sym,cls:$('#fCls').value,sector:(lookedUp[sym]&&lookedUp[sym].sector)||old.sector||''};
   if(!S.series[sym])S.series[sym]={d:[date],c:[price]};
-  const fp=FEED.raw&&FEED.raw.prices&&FEED.raw.prices[sym];
-  if(isFinite(cur)&&cur>0&&!(fp&&Math.abs(fp.ltp-cur)<1e-6))S.manual[sym]=cur;
+  const fp=FEED.raw&&FEED.raw.prices&&FEED.raw.prices[sym],mf=FEED.mf&&FEED.mf.schemes&&FEED.mf.schemes[sym];
+  if(mf&&Number(mf.nav)>0){S.live[sym]=Number(mf.nav);delete S.manual[sym]}
+  else if(isFinite(cur)&&cur>0&&!(fp&&Math.abs(fp.ltp-cur)<1e-6))S.manual[sym]=cur;
   save();
   afterDataChange();
   $('#fQty').value='';$('#fPrice').value='';$('#fCur').value='';
