@@ -894,7 +894,7 @@ function buildDemo(){
 
 /* ---------- state ---------- */
 let S=null,DEMO_AUX=null;
-const FEED={meta:{},updated:'',dir:{},hist:null,raw:null};
+const FEED={meta:{},updated:'',dir:{},hist:null,raw:null,mf:null};
 const REPO={env:'',priceCount:0,priceUpdated:'',priceErr:'',priceErrors:{},dirCount:0,dirErr:'',histCount:0,histUpdated:'',histErr:''};
 const PAGES_URL='https://shashankshashisingh.github.io/PortfolioMgmt/';
 function blank(){return {mode:'user',ver:2,txns:[],borrowings:[],nextBorrowId:1,meta:{},series:{},manual:{},live:{},bench:'',rf:7,targets:{},feedUrl:'',period:'1Y',sort:{k:'value',dir:-1},nextId:1,funds:[{id:'f1',name:'Main',bench:'',totalAssets:0}],view:'ALL'}}
@@ -1291,7 +1291,8 @@ function renderTxns(){
 function fillSymbolLists(){
   const symSet=new Set(Object.keys(S.series).filter(s=>(S.meta[s]||{}).cls!=='Index'));
   for(const s in FEED.dir)symSet.add(s);
-  const sig=symSet.size+':'+Object.keys(S.series).length;
+  for(const s in (FEED.mf&&FEED.mf.schemes||{}))symSet.add(s);
+  const sig=symSet.size+':'+Object.keys(S.series).length+':'+Object.keys(FEED.mf&&FEED.mf.schemes||{}).length;
   if(fillSymbolLists.sig!==sig){
     fillSymbolLists.sig=sig;
     $('#symList').innerHTML=[...symSet].sort().map(s=>{const n=((S.meta[s]||{}).name)||(FEED.dir[s]&&FEED.dir[s].n)||'';return '<option value="'+esc(s)+'" label="'+esc(s+(n?' — '+n:''))+'"></option>'}).join('');
@@ -1954,18 +1955,18 @@ $('#fSym').addEventListener('input',e=>{
 });
 const lookedUp={};
 function localLookup(sym){
-  const d=FEED.dir[sym],f=FEED.meta[sym];
-  const name=(d&&d.n)||(f&&f.name)||'';
+  const d=FEED.dir[sym],f=FEED.meta[sym],mf=FEED.mf&&FEED.mf.schemes&&FEED.mf.schemes[sym];
+  const name=(mf&&mf.name)||(d&&d.n)||(f&&f.name)||'';
   if(!name)return null;
-  return {name,cls:(d&&normClass(d.c))||null,sector:(f&&f.sector)||(d&&d.s)||''};
+  return {name,cls:(mf?'Mutual Funds':(d&&normClass(d.c))||null),sector:(f&&f.sector)||(d&&d.s)||''};
 }
 function applyLocal(sym,r,src){
   $('#fName').value=r.name;
   if(r.cls)$('#fCls').value=r.cls;
   lookedUp[sym]={sector:r.sector||''};
-  const px=FEED.raw&&FEED.raw.prices&&FEED.raw.prices[sym];
-  if(px&&isFinite(px.ltp)&&!$('#fCur').value)$('#fCur').value=px.ltp;
-  msg($('#txnMsg'),'Filled '+r.name+(r.sector?' · '+r.sector:'')+' from '+src+(px&&isFinite(px.ltp)?'. Current price '+inr(px.ltp,2)+' filled in; enter your own buy price.':'. Enter the price.'),'ok');
+  const px=FEED.raw&&FEED.raw.prices&&FEED.raw.prices[sym],mf=FEED.mf&&FEED.mf.schemes&&FEED.mf.schemes[sym],current=mf?Number(mf.nav):(px&&Number(px.ltp));
+  if(Number.isFinite(current)&&current>0&&!$('#fCur').value)$('#fCur').value=current;
+  msg($('#txnMsg'),'Filled '+r.name+(r.sector?' · '+r.sector:'')+' from '+src+(Number.isFinite(current)&&current>0?'. Current price '+inr(current,4)+' filled in; enter your own buy price.':'. Enter the price.'),'ok');
   if(!$('#fPrice').value)$('#fPrice').focus();
 }
 async function lookupSymbol(){
@@ -2091,6 +2092,7 @@ async function loadRepoData(){
   try{const j=await getJSON('data/directory.json');FEED.dir=j.symbols||{};REPO.dirCount=Object.keys(FEED.dir).length;REPO.dirErr=''}catch(e){REPO.dirErr=e.message}
   try{const j=await getJSON('data/history.json');FEED.hist=j;REPO.histCount=Object.keys(j.series||{}).length;REPO.histUpdated=j.updated||'';REPO.histErr=''}catch(e){REPO.histErr=e.message}
   try{const j=await getJSON('data/prices.json');FEED.raw=j;REPO.priceCount=Object.keys(j.prices||{}).length;REPO.priceUpdated=j.updated||'';REPO.priceErrors=j.errors||{};REPO.priceErr=''}catch(e){REPO.priceErr=e.message}
+  try{FEED.mf=await getJSON('data/mf-nav.json');for(const [code,scheme] of Object.entries(FEED.mf.schemes||{})){if(S.txns.some(t=>t.symbol===code)){S.meta[code]={name:scheme.name,cls:'Mutual Funds',sector:''};const day=scheme.date||FEED.mf.tradingDate||istNow().date,series=S.series[code]||{d:[],c:[]};if(!series.d.includes(day)){series.d.push(day);series.c.push(Number(scheme.nav));const zipped=series.d.map((d,i)=>[d,series.c[i]]).sort((a,b)=>a[0].localeCompare(b[0]));S.series[code]={d:zipped.map(x=>x[0]),c:zipped.map(x=>x[1])}}else{const i=series.d.indexOf(day);series.c[i]=Number(scheme.nav);S.series[code]=series}S.live[code]=Number(scheme.nav)}}}catch(e){FEED.mf=null;REPO.mfErr=e.message}
   fillSymbolLists();
   // Always use the repository's Bhavcopy-generated prices as the sole primary quote file.
   S.feedUrl='data/prices.json';
@@ -2122,6 +2124,7 @@ function renderRepoStatus(){
   el.innerHTML=
     line(fyersStatusKind==='ok','FYERS connection',esc(fyersStatusText))+
     line(pOk,'Bhavcopy snapshot / archive',pOk?REPO.priceCount+' symbols, updated '+ago(REPO.priceUpdated)+'. Historical/reference data only; not used as the current quote.':(REPO.priceErr?'could not read data/prices.json ('+esc(REPO.priceErr)+')':'data/prices.json is empty. In your repo, open Actions and run "Update NSE Bhavcopy".'))+
+    line(!!(FEED.mf&&Object.keys(FEED.mf.schemes||{}).length),'AMFI mutual-fund NAVs',FEED.mf?Object.keys(FEED.mf.schemes||{}).length.toLocaleString('en-IN')+' schemes, updated '+ago(FEED.mf.updated)+'. NAVs are daily, not live.':('Could not load data/mf-nav.json'+(REPO.mfErr?' ('+esc(REPO.mfErr)+')':'')))+
     line(REPO.dirCount>0,'Symbol list',REPO.dirCount>0?REPO.dirCount.toLocaleString('en-IN')+' symbols for lookup':(REPO.dirErr?'could not read data/directory.json ('+esc(REPO.dirErr)+')':'not built yet. It is created by the "Update NSE Bhavcopy" run.'))+
     line(REPO.histCount>0,'Price history',REPO.histCount>0?REPO.histCount+' series, updated '+ago(REPO.histUpdated):(REPO.histErr?'could not read data/history.json ('+esc(REPO.histErr)+')':'empty. Run "Update NSE Bhavcopy" in Actions to append closing prices; historical data feeds statistics and benchmark tabs.'))+
     (bulkBlocked?'<p class="note">NSE refuses the bulk quote call from GitHub, so live prices come one symbol at a time and only for symbols listed in <span class="mono">symbols.json</span>. Today\'s benchmark level is also missing, so benchmark statistics stop at the last close.</p>':'')+
