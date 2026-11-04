@@ -120,7 +120,7 @@ tr.sec td:first-child{padding-left:28px}
 form.f{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:start}
 @media(max-width:900px){form.f{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:560px){form.f{grid-template-columns:repeat(2,minmax(0,1fr))}}
-label.fl{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+label.mf-search-results{grid-column:1/-1;display:grid;gap:4px;margin-top:5px;max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:5px;background:var(--panel)}.mf-search-results[hidden]{display:none}.mf-search-results button{display:flex;justify-content:space-between;gap:12px;text-align:left;padding:9px 10px;border:0;border-radius:6px;background:transparent;color:var(--text);cursor:pointer}.mf-search-results button:hover,.mf-search-results button:focus{background:var(--soft)}.mf-search-results small{color:var(--muted);white-space:nowrap}.fl{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
 input,select,textarea{font:inherit;font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:7px 9px;min-width:0;width:100%}
 input[type=number]{font-family:var(--mono)}
 textarea{font-family:var(--mono);font-size:12px;min-height:110px;resize:vertical}
@@ -418,7 +418,7 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
           <label class="fl">Date<input type="date" id="fDate" required></label>
           <label class="fl">Side<select id="fType"><option value="BUY">Buy</option><option value="SELL">Sell</option><option value="SHORT">Short sell</option><option value="COVER">Cover short</option></select></label>
           <label class="fl">Trade product<select id="fProduct"><option value="AUTO">Auto by asset class</option><option value="EQ_DELIVERY">Equity delivery</option><option value="EQ_INTRADAY">Equity intraday</option><option value="EQ_MTF">Equity MTF</option><option value="EQ_FUTURES">Equity futures</option><option value="EQ_OPTIONS">Equity options</option><option value="COM_FUTURES">Commodity futures</option><option value="COM_OPTIONS">Commodity options</option></select></label>
-          <label class="fl">Symbol / ticker<input id="fSym" list="symList" placeholder="Type ticker, e.g. RELIANCE" autocapitalize="characters" spellcheck="false" required><datalist id="symList"></datalist></label>
+          <label class="fl">Symbol / ticker<input id="fSym" list="symList" placeholder="Type ticker, e.g. RELIANCE" autocapitalize="characters" spellcheck="false" required><datalist id="symList"></datalist><div id="mfSearchResults" class="mf-search-results" hidden role="listbox" aria-label="Mutual fund search results"></div></label>
           <label class="fl">Name<input id="fName" placeholder="Reliance Industries"></label>
           <label class="fl">Asset class<select id="fCls"></select></label>
           <label class="fl">Quantity / units<input type="number" id="fQty" step="any" min="0" required><span class="note" id="fQtyAvailable" aria-live="polite">Available shares will appear when you select a symbol and trade side.</span></label>
@@ -1996,10 +1996,23 @@ $('#fSym').addEventListener('input',e=>{
         return '<option value="'+esc(sym)+'" label="'+esc(sym+(name?' — '+name:''))+'"></option>';
       });
       $('#symList').innerHTML=[...symbols,...options].join('');
+      const panel=$('#mfSearchResults');
+      panel.innerHTML=options.length?results.slice(0,30).filter(item=>/^\d+$/.test(String(item.schemeCode??item.scheme_code??''))).map(item=>'<button type="button" data-mf-code="'+esc(item.schemeCode??item.scheme_code)+'"><span>'+esc(item.schemeName??item.scheme_name)+'</span><small>MF scheme</small></button>').join(''):'<small>No matching funds found. Try another name.</small>';
+      panel.hidden=false;
     }catch(err){
-      // Keep manual transaction entry available if the remote search is temporarily unavailable.
+      const panel=$('#mfSearchResults');panel.innerHTML='<small>MF search is temporarily unavailable. You can still enter a scheme code and transaction details manually.</small>';panel.hidden=false;
     }
   },250);
+});
+$('#mfSearchResults').addEventListener('click',e=>{
+  const button=e.target.closest('button[data-mf-code]');
+  if(!button)return;
+  const code=String(button.dataset.mfCode),scheme=liveMfMatches.get(code);
+  if(!scheme)return;
+  applyMutualFundSelection(code,scheme);
+  $('#mfSearchResults').hidden=true;
+  $('#mfSearchResults').innerHTML='';
+  msg($('#txnMsg'),'Selected '+scheme.name+'. Enter the transaction date, units and actual trade price, then click Add.','ok');
 });
 $('#fSym').addEventListener('input',e=>{
   const raw=e.target.value.trim(),matched=resolveMutualFundName(raw);
