@@ -2181,6 +2181,8 @@ async function loadRepoData(){
   save();
   startFeed();
   renderRepoStatus();
+  // Historical prices may arrive after the user has started filling the manual-trade form.
+  updateTradeNotional();
 }
 function ago(iso){
   if(!iso)return '';
@@ -2463,6 +2465,7 @@ load();
 initCloudAuth().then(()=>handleFyersCallback()).catch(e=>{console.error('FYERS callback handling failed',e)});
 document.getElementById('connectFyersBtn').addEventListener('click',connectFyers);
 $('#fDate').value=istNow().date;
+updateTradeNotional();
 initSim();
 if(S.mode==='demo'&&!S.bench)S.bench='NIFTY50';
 let startTab='today';
