@@ -120,7 +120,7 @@ tr.sec td:first-child{padding-left:28px}
 form.f{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:start}
 @media(max-width:900px){form.f{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:560px){form.f{grid-template-columns:repeat(2,minmax(0,1fr))}}
-label.mf-search-results{grid-column:1/-1;display:grid;gap:4px;margin-top:5px;max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:5px;background:var(--panel)}.mf-search-results[hidden]{display:none}.mf-search-results button{display:flex;justify-content:space-between;gap:12px;text-align:left;padding:9px 10px;border:0;border-radius:6px;background:transparent;color:var(--text);cursor:pointer}.mf-search-results button:hover,.mf-search-results button:focus{background:var(--soft)}.mf-search-results small{color:var(--muted);white-space:nowrap}.fl{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.security-picker{position:relative;z-index:5}.mf-search-results{position:absolute;top:100%;left:0;right:0;z-index:30;display:grid;gap:2px;max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:5px;background:var(--panel);box-shadow:0 8px 24px #0002}.mf-search-results[hidden]{display:none}.mf-search-results button{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;text-align:left;padding:9px 10px;border:0;border-radius:6px;background:transparent;color:var(--text);cursor:pointer;width:100%}.mf-search-results button:hover,.mf-search-results button:focus{background:var(--soft);outline:none}.mf-search-results button span{min-width:0}.mf-search-results small{color:var(--muted);white-space:nowrap;flex-shrink:0}.fl{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
 input,select,textarea{font:inherit;font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:7px 9px;min-width:0;width:100%}
 input[type=number]{font-family:var(--mono)}
 textarea{font-family:var(--mono);font-size:12px;min-height:110px;resize:vertical}
@@ -418,7 +418,7 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
           <label class="fl">Date<input type="date" id="fDate" required></label>
           <label class="fl">Side<select id="fType"><option value="BUY">Buy</option><option value="SELL">Sell</option><option value="SHORT">Short sell</option><option value="COVER">Cover short</option></select></label>
           <label class="fl">Trade product<select id="fProduct"><option value="AUTO">Auto by asset class</option><option value="EQ_DELIVERY">Equity delivery</option><option value="EQ_INTRADAY">Equity intraday</option><option value="EQ_MTF">Equity MTF</option><option value="EQ_FUTURES">Equity futures</option><option value="EQ_OPTIONS">Equity options</option><option value="COM_FUTURES">Commodity futures</option><option value="COM_OPTIONS">Commodity options</option></select></label>
-          <label class="fl">Symbol / ticker<input id="fSym" list="symList" placeholder="Type ticker, e.g. RELIANCE" autocapitalize="characters" spellcheck="false" required><datalist id="symList"></datalist><div id="mfSearchResults" class="mf-search-results" hidden role="listbox" aria-label="Mutual fund search results"></div></label>
+          <label class="fl security-picker">Symbol / ticker<input id="fSym" autocomplete="off" placeholder="Search company, fund or security…" autocapitalize="characters" spellcheck="false" aria-autocomplete="list" aria-controls="mfSearchResults" required><div id="mfSearchResults" class="mf-search-results" hidden role="listbox" aria-label="Security search results"></div></label>
           <label class="fl">Name<input id="fName" placeholder="Reliance Industries"></label>
           <label class="fl">Asset class<select id="fCls"></select></label>
           <label class="fl">Quantity / units<input type="number" id="fQty" step="any" min="0" required><span class="note" id="fQtyAvailable" aria-live="polite">Available shares will appear when you select a symbol and trade side.</span></label>
@@ -1962,75 +1962,96 @@ function resolveMutualFundName(value){
   for(const [code,scheme] of liveMfMatches){if(String(scheme.name||'').trim().toLocaleLowerCase()===q)return [code,scheme]}
   return null;
 }
+function closeSecurityResults(){
+  const panel=$('#mfSearchResults');panel.hidden=true;panel.innerHTML='';
+}
+function renderSecurityResults(query,mfResults=[]){
+  const panel=$('#mfSearchResults'),q=query.trim().toLocaleLowerCase();
+  if(!q){closeSecurityResults();return}
+  const securities=[];
+  const symbols=[...new Set(Object.keys(S.meta||{}).concat(Object.keys(FEED.dir||{}),Object.keys(S.series||{})))];
+  for(const sym of symbols){
+    const d=FEED.dir&&FEED.dir[sym],meta=S.meta&&S.meta[sym],name=(meta&&meta.name)||(d&&d.n)||sym;
+    if(sym.toLocaleLowerCase().includes(q)||String(name).toLocaleLowerCase().includes(q)){
+      const cls=(d&&normClass(d.c))||(meta&&meta.cls)||'Equities';
+      securities.push({kind:'security',symbol:sym,name,cls});
+    }
+  }
+  const funds=[];
+  for(const item of mfResults){
+    const code=String(item.schemeCode??item.scheme_code??''),name=String(item.schemeName??item.scheme_name??'').trim();
+    if(!/^\d+$/.test(code)||!name)continue;
+    const cached=FEED.mf&&FEED.mf.schemes&&FEED.mf.schemes[code]||{};
+    const scheme={...cached,name,nav:cached.nav??null,date:cached.date||''};
+    liveMfMatches.set(code,scheme);funds.push({kind:'mf',symbol:code,name,cls:'Mutual Funds'});
+  }
+  const merged=[...securities,...funds].filter((item,i,all)=>all.findIndex(x=>x.kind===item.kind&&x.symbol===item.symbol)===i).slice(0,35);
+  panel.innerHTML=merged.length?merged.map(item=>'<button type="button" role="option" data-security-kind="'+item.kind+'" data-security-id="'+esc(item.symbol)+'"><span>'+esc(item.name)+' <small>· '+esc(item.symbol)+'</small></span><small>'+esc(item.cls)+'</small></button>').join(''):'<small>No matching securities found.</small>';
+  panel.hidden=false;
+}
 function applyMutualFundSelection(code,scheme){
   $('#fSym').value=code;
   $('#fName').value=scheme.name||'';
   $('#fCls').value='Mutual Funds';
   const nav=Number(scheme.nav);
-  if(nav>0&&!$('#fCur').value)$('#fCur').value=nav;
+  $('#fCur').value=nav>0?String(nav):'';
+  closeSecurityResults();
   updateTradeNotional();
+  msg($('#txnMsg'),'Selected '+scheme.name+'. Enter the transaction date, units and actual trade price, then click Add.','ok');
 }
 $('#fSym').addEventListener('input',e=>{
   const query=e.target.value.trim(),request=++mfSearchRequest;
   clearTimeout(mfSearchTimer);
-  if(query.length<2){$('#mfSearchResults').hidden=true;return}
+  if(query.length<1){closeSecurityResults();return}
+  // Show exchange-listed securities immediately, then merge mutual-fund matches.
+  renderSecurityResults(query);
   mfSearchTimer=setTimeout(async()=>{
     try{
       const response=await fetch('https://api.mfapi.in/mf/search?q='+encodeURIComponent(query),{headers:{Accept:'application/json'}});
       if(!response.ok)throw new Error('HTTP '+response.status);
       const results=await response.json();
-      if(request!==mfSearchRequest||!Array.isArray(results))return;
-      liveMfMatches.clear();
-      const options=[];
-      for(const item of results.slice(0,30)){
-        const code=String(item.schemeCode??item.scheme_code??'');
-        const name=String(item.schemeName??item.scheme_name??'').trim();
-        if(!/^\d+$/.test(code)||!name)continue;
-        const cached=FEED.mf&&FEED.mf.schemes&&FEED.mf.schemes[code]||{};
-        const scheme={...cached,name,nav:cached.nav??null,date:cached.date||''};
-        liveMfMatches.set(code,scheme);
-        options.push('<option value="'+esc(name)+'" label="Mutual Fund · scheme code '+esc(code)+'"></option>');
-      }
-      const symbols=[...new Set(Object.keys(S.series).concat(Object.keys(FEED.dir||{})))].sort().map(sym=>{
-        const name=(S.meta[sym]&&S.meta[sym].name)||(FEED.dir[sym]&&FEED.dir[sym].n)||'';
-        return '<option value="'+esc(sym)+'" label="'+esc(sym+(name?' — '+name:''))+'"></option>';
-      });
-      $('#symList').innerHTML=[...symbols,...options].join('');
-      const panel=$('#mfSearchResults');
-      panel.innerHTML=options.length?results.slice(0,30).filter(item=>/^\d+$/.test(String(item.schemeCode??item.scheme_code??''))).map(item=>'<button type="button" data-mf-code="'+esc(item.schemeCode??item.scheme_code)+'"><span>'+esc(item.schemeName??item.scheme_name)+'</span><small>MF scheme</small></button>').join(''):'<small>No matching funds found. Try another name.</small>';
-      panel.hidden=false;
+      if(request!==mfSearchRequest||$('#fSym').value.trim()!==query||!Array.isArray(results))return;
+      renderSecurityResults(query,results.slice(0,30));
     }catch(err){
-      const panel=$('#mfSearchResults');panel.innerHTML='<small>MF search is temporarily unavailable. You can still enter a scheme code and transaction details manually.</small>';panel.hidden=false;
+      // Keep local exchange/security matches visible if the MF directory is temporarily unavailable.
     }
-  },250);
+  },180);
 });
 $('#mfSearchResults').addEventListener('click',e=>{
-  const button=e.target.closest('button[data-mf-code]');
+  const button=e.target.closest('button[data-security-kind]');
   if(!button)return;
-  const code=String(button.dataset.mfCode),scheme=liveMfMatches.get(code);
-  if(!scheme)return;
-  applyMutualFundSelection(code,scheme);
-  $('#mfSearchResults').hidden=true;
-  $('#mfSearchResults').innerHTML='';
-  msg($('#txnMsg'),'Selected '+scheme.name+'. Enter the transaction date, units and actual trade price, then click Add.','ok');
+  const kind=button.dataset.securityKind,id=String(button.dataset.securityId);
+  if(kind==='mf'){
+    const scheme=liveMfMatches.get(id)||((FEED.mf&&FEED.mf.schemes&&FEED.mf.schemes[id])||null);
+    if(scheme)applyMutualFundSelection(id,scheme);
+    return;
+  }
+  const item=button;
+  const name=item.querySelector('span').childNodes[0].textContent.trim();
+  const cls=item.querySelectorAll('small')[1]?.textContent||'Equities';
+  $('#fSym').value=id;$('#fName').value=name;$('#fCls').value=CLASSES.includes(cls)?cls:'Equities';
+  closeSecurityResults();
+  const local=localLookup(id);
+  if(local)applyLocal(id,local,'the security directory');
+  else{updateTradeNotional();scheduleManualTradePriceRefresh()}
+  msg($('#txnMsg'),'Selected '+name+'. Enter the transaction date, quantity and trade price, then click Add.','ok');
 });
-$('#fSym').addEventListener('input',e=>{
-  const raw=e.target.value.trim(),matched=resolveMutualFundName(raw);
-  if(matched){applyMutualFundSelection(matched[0],matched[1]);return}
-  const s=raw.toUpperCase(),m=S.meta[s],mf=FEED.mf&&FEED.mf.schemes&&FEED.mf.schemes[s],d=FEED.dir&&FEED.dir[s];
-  if(mf){
-    $('#fName').value=mf.name||$('#fName').value;
-    $('#fCls').value='Mutual Funds';
-    const nav=Number(mf.nav);
-    if(nav>0&&!$('#fCur').value)$('#fCur').value=nav;
-  }else if(d&&normClass(d.c)==='ETFs'){
-    if(!$('#fName').value)$('#fName').value=d.n||'';
-    $('#fCls').value='ETFs';
-    const quote=FEED.raw&&FEED.raw.prices&&FEED.raw.prices[s];
-    if(quote&&Number(quote.ltp)>0&&!$('#fCur').value)$('#fCur').value=Number(quote.ltp);
-  }else if(m){
-    if(!$('#fName').value)$('#fName').value=m.name||'';
-    if(CLASSES.includes(m.cls))$('#fCls').value=m.cls;
+$('#fSym').addEventListener('keydown',e=>{
+  if(e.key==='Escape'){closeSecurityResults();return}
+  if(e.key==='Enter'&&!$('#mfSearchResults').hidden){
+    const first=$('#mfSearchResults').querySelector('button[data-security-kind]');
+    if(first){e.preventDefault();first.click()}
+  }
+});
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.security-picker'))closeSecurityResults();
+});
+$('#fSym').addEventListener('change',()=>{
+  if($('#mfSearchResults').hidden){
+    const raw=$('#fSym').value.trim(),matched=resolveMutualFundName(raw);
+    if(matched){applyMutualFundSelection(matched[0],matched[1]);return}
+    const sym=raw.toUpperCase(),loc=localLookup(sym);
+    if(loc)applyLocal(sym,loc,FEED.dir[sym]?'the NSE symbol list':'the price feed');
   }
 });
 const lookedUp={};
