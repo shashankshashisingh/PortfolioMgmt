@@ -2044,11 +2044,14 @@ function applyLocal(sym,r,src){
   $('#fName').value=r.name;
   if(r.cls)$('#fCls').value=r.cls;
   lookedUp[sym]={sector:r.sector||''};
-  const px=FEED.raw&&FEED.raw.prices&&FEED.raw.prices[sym],mf=FEED.mf&&FEED.mf.schemes&&FEED.mf.schemes[sym],current=mf?Number(mf.nav):(px&&Number(px.ltp));
-  if(Number.isFinite(current)&&current>0&&!$('#fCur').value)$('#fCur').value=current;
-  msg($('#txnMsg'),'Filled '+r.name+(r.sector?' · '+r.sector:'')+' from '+src+(Number.isFinite(current)&&current>0?'. Current price '+inr(current,4)+' filled in; enter your own buy price.':'. Enter the price.'),'ok');
+  const mf=FEED.mf&&FEED.mf.schemes&&FEED.mf.schemes[sym];
+  const local=mf?{price:Number(mf.nav),source:'latest mutual-fund NAV'}:latestLocalTradedPrice(sym);
+  // Always replace the prior symbol's current price; never carry a stale value into a new trade.
+  $('#fCur').value=local&&local.price>0?String(local.price):'';
+  msg($('#txnMsg'),'Filled '+r.name+(r.sector?' · '+r.sector:'')+' from '+src+(local&&local.price>0?'. Current price '+inr(local.price,4)+' filled from '+local.source+'.':'. Fetching current price…'),'ok');
   if(!$('#fPrice').value)$('#fPrice').focus();
   updateTradeNotional();
+  if(!mf)scheduleManualTradePriceRefresh();
 }
 async function lookupSymbol(){
   const sym=$('#fSym').value.trim().toUpperCase(),M=$('#txnMsg');
@@ -2240,15 +2243,71 @@ function historicalPriceFor(sym,date){
   if(age>7)return null;
   return {...best,source:best.date===day?'historical close for selected date':'last available trading close ('+best.date+')'};
 }
+let manualQuoteRequest=0,manualQuoteTimer=null;
+function latestLocalTradedPrice(sym){
+  const raw=FEED.raw&&FEED.raw.prices&&FEED.raw.prices[sym];
+  const rawPrice=Number(raw&&(typeof raw==='number'?raw:(raw.ltp??raw.price??raw.close)));
+  if(Number.isFinite(rawPrice)&&rawPrice>0)return {price:rawPrice,source:'last traded price (latest NSE snapshot)'};
+  const series=S.series[sym];
+  if(series&&Array.isArray(series.c)&&series.c.length){
+    const p=Number(series.c[series.c.length-1]);
+    if(Number.isFinite(p)&&p>0)return {price:p,source:'last available traded close'};
+  }
+  const live=Number(S.live[sym]);
+  return Number.isFinite(live)&&live>0?{price:live,source:'last available quote'}:null;
+}
+async function refreshManualTradePrice(){
+  const sym=$('#fSym').value.trim().toUpperCase(),request=++manualQuoteRequest;
+  if(!sym)return;
+  const cls=$('#fCls').value;
+  const isEquity=['Equities','ETFs'].includes(cls);
+  if(!isEquity)return;
+  const market=istNow();
+  if(market.open){
+    if(cloudClient&&cloudUser&&cloudReady&&S.mode==='user'){
+      try{
+        const {data,error}=await cloudClient.functions.invoke('fyers-quotes',{body:{symbols:[sym],indices:[]}});
+        if(request!==manualQuoteRequest||$('#fSym').value.trim().toUpperCase()!==sym)return;
+        if(error)throw error;
+        if(data&&data.error)throw new Error(data.message||data.error);
+        const quote=data&&data.quotes&&data.quotes[sym],ltp=Number(quote&&quote.ltp);
+        if(Number.isFinite(ltp)&&ltp>0){
+          S.live[sym]=ltp;$('#fCur').value=String(ltp);
+          FEED.updated=data.asOf||new Date().toISOString();
+          updateTradeNotional();
+          msg($('#txnMsg'),'Current price refreshed from FYERS: '+inr(ltp,2)+'.','ok');
+          return;
+        }
+      }catch(e){console.warn('Manual-trade FYERS quote unavailable',e)}
+    }
+    // If FYERS is not connected or does not return this symbol, use the most recent exchange snapshot.
+  }
+  if(request!==manualQuoteRequest||$('#fSym').value.trim().toUpperCase()!==sym)return;
+  const last=latestLocalTradedPrice(sym);
+  if(last){
+    $('#fCur').value=String(last.price);
+    updateTradeNotional();
+    msg($('#txnMsg'),'Current price set to '+inr(last.price,2)+' from '+last.source+'.','ok');
+  }else{
+    $('#fCur').value='';
+    updateTradeNotional();
+  }
+}
+function scheduleManualTradePriceRefresh(){
+  clearTimeout(manualQuoteTimer);
+  manualQuoteTimer=setTimeout(refreshManualTradePrice,250);
+}
 function updateTradeNotional(){
-  const sym=$('#fSym').value.trim().toUpperCase(),date=$('#fDate').value,qty=Number($('#fQty').value),typed=$('#fPrice').value.trim(),hist=typed===''?historicalPriceFor(sym,date):null;
-  const resolved=typed!==''?Number(typed):(hist&&hist.price);
+  const sym=$('#fSym').value.trim().toUpperCase(),date=$('#fDate').value,qty=Number($('#fQty').value),typed=$('#fPrice').value.trim(),current=Number($('#fCur').value),hist=typed===''&&!(current>0)?historicalPriceFor(sym,date):null;
+  const resolved=typed!==''?Number(typed):(current>0?current:(hist&&hist.price));
   const valid=Number.isFinite(qty)&&qty>0&&Number.isFinite(resolved)&&resolved>0;
   $('#tradeNotional').textContent=valid?inr(qty*resolved,2):'—';
-  $('#tradeValueHint').textContent=typed!==''?'Quantity × entered trade price (manual override)':(valid?'Quantity × '+hist.source:'Select a symbol and trade date with historical price data; no current-price fallback is used.');
+  $('#tradeValueHint').textContent=typed!==''?'Quantity × entered trade price (manual override)':(current>0?'Quantity × current market / last traded price':(valid?'Quantity × '+hist.source:'Enter a symbol and quantity; current or historical price will be used when available.'));
 }
-['fSym','fQty','fPrice','fType','fDate'].forEach(id=>$('#'+id).addEventListener('input',updateTradeNotional));
+['fSym','fQty','fPrice','fCur','fType','fDate'].forEach(id=>$('#'+id).addEventListener('input',updateTradeNotional));
 ['fSym','fPrice','fDate'].forEach(id=>$('#'+id).addEventListener('change',updateTradeNotional));
+$('#fSym').addEventListener('change',scheduleManualTradePriceRefresh);
+$('#fCls').addEventListener('change',scheduleManualTradePriceRefresh);
 function updateAvailableQuantity(){
   const fund=$('#fFund').value,type=$('#fType').value,sym=$('#fSym').value.trim().toUpperCase();
   const qty=$('#fQty'),hint=$('#fQtyAvailable'),portfolioHint=$('#fPortfolioQty');
@@ -2274,10 +2333,10 @@ $('#txnForm').addEventListener('submit',e=>{
   e.preventDefault();
   let fund=$('#fFund').value;
   const date=$('#fDate').value,type=$('#fType').value,sym=$('#fSym').value.trim().toUpperCase(),qty=parseFloat($('#fQty').value),typedPrice=$('#fPrice').value.trim(),cur=parseFloat($('#fCur').value);
-  const historical=typedPrice===''?historicalPriceFor(sym,date):null;
-  const price=typedPrice===''?(historical?historical.price:NaN):Number(typedPrice);
+  const historical=typedPrice===''&&!(cur>0)?historicalPriceFor(sym,date):null;
+  const price=typedPrice===''?(cur>0?cur:(historical?historical.price:NaN)):Number(typedPrice);
   const M=$('#txnMsg');
-  if(!date||!sym||!(qty>0)||!(price>0)||!Number.isFinite(price)){msg(M,typedPrice===''?'No historical close is available for '+sym+' on or shortly before '+fmtD(date)+'. Load historical price data or enter an explicit price override.':'Enter a date, symbol, positive quantity and a valid positive price.','err');return}
+  if(!date||!sym||!(qty>0)||!(price>0)||!Number.isFinite(price)){msg(M,typedPrice===''?'No current or last traded price is available for '+sym+'. Connect FYERS during market hours, or load the latest NSE price snapshot.':'Enter a date, symbol, positive quantity and a valid positive price.','err');return}
   if(S.mode==='demo'){ensureUser()}
   if(!S.funds.some(f=>f.id===fund))fund=S.funds[0].id;
   const fundTx=S.txns.filter(t=>t.fund===fund),book=processTxns(fundTx),b=book[sym]||{lots:[],shortLots:[]};
