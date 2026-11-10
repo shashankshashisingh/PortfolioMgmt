@@ -424,7 +424,7 @@ details>summary{text-transform:uppercase;font-size:11px;letter-spacing:.08em}
           <label class="fl">Quantity / units<input type="number" id="fQty" step="any" min="0" required><span class="note" id="fQtyAvailable" aria-live="polite">Available shares will appear when you select a symbol and trade side.</span></label>
           <label class="fl">Trade price (₹)<input type="number" id="fPrice" step="any" min="0" placeholder="Blank = historical close for date"></label>
           <label class="fl">Current price (₹)<input type="number" id="fCur" step="any" min="0" placeholder="optional"><span class="note" id="fPortfolioQty" aria-live="polite">Portfolio shares: —</span></label>
-          <div class="fl" style="grid-column:1/-1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:12px"><span><b>Notional trade value</b><span class="note" id="tradeValueHint" style="display:block;margin:2px 0 0">Quantity × trade price</span></span><b class="mono" id="tradeNotional">—</b></div>
+          <div class="fl" style="grid-column:1/-1;border:1px solid var(--line);border-radius:10px;padding:10px 14px;display:flex;flex-direction:row;justify-content:space-between;align-items:center;gap:16px;text-align:left"><span style="flex:1;min-width:0;text-align:left"><b>Notional trade value</b><span class="note" id="tradeValueHint" style="display:block;margin:2px 0 0">Quantity × trade price</span></span><b class="mono" id="tradeNotional" style="white-space:nowrap;text-align:right">—</b></div>
           <button class="btn ghost" type="button" id="fLookup">Look up symbol</button>
           <button class="btn" type="submit">Add</button>
         </form>
@@ -1968,6 +1968,7 @@ function applyMutualFundSelection(code,scheme){
   $('#fCls').value='Mutual Funds';
   const nav=Number(scheme.nav);
   if(nav>0&&!$('#fCur').value)$('#fCur').value=nav;
+  updateTradeNotional();
 }
 $('#fSym').addEventListener('input',e=>{
   const query=e.target.value.trim(),request=++mfSearchRequest;
@@ -2047,6 +2048,7 @@ function applyLocal(sym,r,src){
   if(Number.isFinite(current)&&current>0&&!$('#fCur').value)$('#fCur').value=current;
   msg($('#txnMsg'),'Filled '+r.name+(r.sector?' · '+r.sector:'')+' from '+src+(Number.isFinite(current)&&current>0?'. Current price '+inr(current,4)+' filled in; enter your own buy price.':'. Enter the price.'),'ok');
   if(!$('#fPrice').value)$('#fPrice').focus();
+  updateTradeNotional();
 }
 async function lookupSymbol(){
   const sym=$('#fSym').value.trim().toUpperCase(),M=$('#txnMsg');
