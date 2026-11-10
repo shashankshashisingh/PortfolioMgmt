@@ -2070,8 +2070,12 @@ async function lookupSymbol(){
     $('#fName').value=String(r.name);
     {const ac=normClass(r.assetClass);if(ac)$('#fCls').value=ac}
     lookedUp[sym]={sector:r.sector?String(r.sector):''};
-    msg(M,'Filled '+r.name+(r.sector?' · '+r.sector:'')+' from Claude\'s general knowledge. Check it, then enter the price.','ok');
+    const local=latestLocalTradedPrice(sym);
+    $('#fCur').value=local?String(local.price):'';
+    msg(M,'Filled '+r.name+(r.sector?' · '+r.sector:'')+' from Claude\'s general knowledge. Check it, then confirm the current price.','ok');
     if(!$('#fPrice').value)$('#fPrice').focus();
+    updateTradeNotional();
+    scheduleManualTradePriceRefresh();
   }catch(e){
     const c=e&&e.code;
     msg(M,c==='not_granted'?'Lookup was declined, so enter the name and class by hand.':c==='rate_limited'?'Too many lookups at once. Wait a moment and try again.':'Lookup failed. Enter the name and class by hand.','err');
