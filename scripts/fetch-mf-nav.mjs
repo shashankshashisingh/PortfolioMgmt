@@ -6,10 +6,52 @@ const HEADERS = {
   "Accept": "application/json",
 };
 
-async function getJson(url) {
-  const response = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(45000) });
-  if (!response.ok) throw new Error(`MFapi request failed (${response.status}): ${url}`);
-  return response.json();
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+function retryAfterMs(response) {
+  const value = response.headers?.get?.("retry-after");
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const date = Date.parse(value);
+  return Number.isFinite(date) ? Math.max(0, date - Date.now()) : null;
+}
+
+export async function getJson(url, {
+  fetchImpl = fetch,
+  sleepFn = sleep,
+  maxAttempts = 6,
+} = {}) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let response;
+    try {
+      response = await fetchImpl(url, {
+        headers: HEADERS,
+        signal: AbortSignal.timeout(45000),
+      });
+    } catch (error) {
+      if (attempt === maxAttempts) {
+        throw new Error(`MFapi request failed after ${attempt} attempts: ${error.message}`);
+      }
+      const delay = Math.min(5000 * (2 ** (attempt - 1)), 60000);
+      console.warn(`MFapi network error; retrying in ${Math.ceil(delay / 1000)}s (attempt ${attempt}/${maxAttempts}).`);
+      await sleepFn(delay);
+      continue;
+    }
+
+    if (response.ok) return response.json();
+
+    const retryable = response.status === 429 || [500, 502, 503, 504].includes(response.status);
+    if (!retryable || attempt === maxAttempts) {
+      throw new Error(`MFapi request failed (${response.status}) after ${attempt} attempt(s): ${url}`);
+    }
+
+    const delay = retryAfterMs(response) ?? Math.min(5000 * (2 ** (attempt - 1)), 60000);
+    console.warn(`MFapi returned HTTP ${response.status}; retrying in ${Math.ceil(delay / 1000)}s (attempt ${attempt}/${maxAttempts}).`);
+    await sleepFn(delay);
+  }
+
+  throw new Error(`MFapi request failed after ${maxAttempts} attempts: ${url}`);
 }
 
 function parseDate(value) {
@@ -69,16 +111,16 @@ async function fetchCatalog() {
     if (!Array.isArray(page)) throw new Error("MFapi scheme catalog response was not an array.");
     catalog.push(...page);
     if (page.length < pageSize) break;
+    // Avoid hitting MFapi's rate limit while paging through the full catalogue.
+    await sleep(1500);
   }
   if (catalog.length < 1000) throw new Error(`MFapi returned only ${catalog.length} scheme records; refusing to replace the current NAV file.`);
   return catalog;
 }
 
 async function main() {
-  const [catalog, latestPayload] = await Promise.all([
-    fetchCatalog(),
-    getJson(`${BASE}/mf/latest`),
-  ]);
+  const catalog = await fetchCatalog();
+  const latestPayload = await getJson(`${BASE}/mf/latest`);
   const latest = parseMfapiLatest(latestPayload);
   if (Object.keys(latest).length < 1000) {
     throw new Error(`MFapi latest-NAV response contained only ${Object.keys(latest).length} valid schemes; refusing to replace the current NAV file.`);
