@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <title>Portfolio Desk</title>
 <link rel="preconnect" href="https://raw.githubusercontent.com">
 <style>
@@ -1295,9 +1296,8 @@ function fillSymbolLists(){
   const sig=symSet.size+':'+Object.keys(S.series).length+':'+Object.keys(FEED.mf&&FEED.mf.schemes||{}).length;
   if(fillSymbolLists.sig!==sig){
     fillSymbolLists.sig=sig;
-    const symbolOptions=[...symSet].sort().map(s=>{const n=((S.meta[s]||{}).name)||(FEED.dir[s]&&FEED.dir[s].n)||(FEED.mf&&FEED.mf.schemes&&FEED.mf.schemes[s]&&FEED.mf.schemes[s].name)||'';return '<option value="'+esc(s)+'" label="'+esc(s+(n?' — '+n:''))+'"></option>'});
-    const mfOptions=Object.entries(FEED.mf&&FEED.mf.schemes||{}).map(([code,scheme])=>'<option value="'+esc(scheme.name)+'" label="Mutual Fund · scheme code '+esc(code)+'"></option>');
-    $('#symList').innerHTML=[...symbolOptions,...mfOptions].join('');
+    // Symbol autocomplete now uses the dedicated search results component (#mfSearchResults).
+    // Do not populate the removed #symList datalist: querying it returned null and aborted cloud loading.
   }
   const bk=processTxns(S.txns);
   const held=Object.keys(bk).filter(s=>Math.abs(sum(bk[s].lots.map(l=>l.qty))-sum((bk[s].shortLots||[]).map(l=>l.qty)))>1e-9).sort();
