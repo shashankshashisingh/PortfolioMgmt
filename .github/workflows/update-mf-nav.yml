@@ -21,12 +21,12 @@ concurrency:
 jobs:
   nav:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
       - run: node tests/mf-nav.test.js
       - run: node scripts/fetch-mf-nav.mjs
       - name: Commit latest MFapi NAV file
