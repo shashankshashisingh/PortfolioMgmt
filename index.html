@@ -1796,6 +1796,7 @@ async function connectFyers(){
     if(!data||!data.auth_url)throw new Error(data&&data.message||data&&data.error||'Could not start FYERS authorization');
     location.href=data.auth_url;
   }catch(e){
+    sessionStorage.removeItem('portfolio-fyers-auto-started');
     console.error('FYERS authorization start failed',e);
     fyersStatus('Could not start authorization. Check the Supabase function and try again.','err');
   }
@@ -1871,11 +1872,11 @@ async function pollFyersQuotes(show){
     try{
       if(e&&e.context&&typeof e.context.clone==='function'){
         const body=await e.context.clone().json();
-        if(body&&body.error==='fyers_reauth_required'){fyersStatus('FYERS needs authorization again. Select Connect FYERS.','err');return}
+        if(body&&body.error==='fyers_reauth_required'){fyersStatus('Starting FYERS authorization…');if(!sessionStorage.getItem('portfolio-fyers-auto-started')){sessionStorage.setItem('portfolio-fyers-auto-started','1');await connectFyers()}else{fyersStatus('FYERS authorization is required. Complete the FYERS sign-in to continue.','err')}return}
         if(body&&(body.message||body.error))detail=body.message||body.error;
       }
     }catch(_){}
-    if(/fyers_reauth_required|401|unauthorized|refresh token expired/i.test(detail))fyersStatus('FYERS needs authorization again. Select Connect FYERS.','err');
+    if(/fyers_reauth_required|401|unauthorized|refresh token expired/i.test(detail)){fyersStatus('Starting FYERS authorization…');if(!sessionStorage.getItem('portfolio-fyers-auto-started')){sessionStorage.setItem('portfolio-fyers-auto-started','1');await connectFyers()}else{fyersStatus('FYERS authorization is required. Complete the FYERS sign-in to continue.','err')}}
     else if(show)fyersStatus('Could not fetch live prices. '+(detail||'Check sign-in and Supabase function logs.'),'err');
   }finally{fyersBusy=false}
 }
