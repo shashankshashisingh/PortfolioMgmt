@@ -1,5 +1,35 @@
 import assert from "node:assert/strict";
-import { parseMfapiLatest, mergeSchemeCatalog } from "../scripts/fetch-mf-nav.mjs";
+import { getJson, parseMfapiLatest, mergeSchemeCatalog } from "../scripts/fetch-mf-nav.mjs";
+
+// A temporary 429 response should be retried, honoring Retry-After.
+let attempts = 0;
+const delays = [];
+const payload = [{ schemeCode: 123, schemeName: "Example Fund" }];
+const result = await getJson("https://api.mfapi.in/mf?limit=1000&offset=0", {
+  fetchImpl: async () => {
+    attempts++;
+    if (attempts === 1) return new Response("rate limited", { status: 429, headers: { "Retry-After": "0" } });
+    return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
+  },
+  sleepFn: async ms => delays.push(ms),
+});
+assert.deepEqual(result, payload);
+assert.equal(attempts, 2);
+assert.deepEqual(delays, [0]);
+
+// Permanent client errors should fail immediately rather than being retried.
+let badRequestAttempts = 0;
+await assert.rejects(
+  getJson("https://api.mfapi.in/mf", {
+    fetchImpl: async () => {
+      badRequestAttempts++;
+      return new Response("bad request", { status: 400 });
+    },
+    sleepFn: async () => {},
+  }),
+  /MFapi request failed \(400\)/,
+);
+assert.equal(badRequestAttempts, 1);
 
 const latestPayload = [
   {
