@@ -1290,15 +1290,7 @@ function renderTxns(){
     t.map(x=>'<tr><td>'+esc(fmtD(x.date))+'</td><td>'+esc(fundName(x.fund))+'</td><td class="'+(x.type==='BUY'?'':'loss')+'">'+({BUY:'Buy',SELL:'Sell',SHORT:'Short sell',COVER:'Cover short'}[x.type]||x.type)+'</td><td>'+esc(x.symbol)+'</td><td>'+esc(chargeProductLabel(x))+'</td><td class="n">'+nm(x.qty,x.qty%1?3:0)+'</td><td class="n">'+inr(x.price,2)+'</td><td class="n">'+inr(x.qty*x.price)+'</td><td><button class="btn ghost sm" data-del="'+x.id+'" aria-label="Delete transaction">Delete</button></td></tr>').join('')+'</tbody></table>'
 }
 function fillSymbolLists(){
-  const symSet=new Set(Object.keys(S.series).filter(s=>(S.meta[s]||{}).cls!=='Index'));
-  for(const s in FEED.dir)symSet.add(s);
-  for(const s in (FEED.mf&&FEED.mf.schemes||{}))symSet.add(s);
-  const sig=symSet.size+':'+Object.keys(S.series).length+':'+Object.keys(FEED.mf&&FEED.mf.schemes||{}).length;
-  if(fillSymbolLists.sig!==sig){
-    fillSymbolLists.sig=sig;
-    // Symbol autocomplete now uses the dedicated search results component (#mfSearchResults).
-    // Do not populate the removed #symList datalist: querying it returned null and aborted cloud loading.
-  }
+  // Symbol autocomplete uses the dedicated search results component (#mfSearchResults).
   const bk=processTxns(S.txns);
   const held=Object.keys(bk).filter(s=>Math.abs(sum(bk[s].lots.map(l=>l.qty))-sum((bk[s].shortLots||[]).map(l=>l.qty)))>1e-9).sort();
   $('#pSym').innerHTML=held.map(s=>'<option>'+esc(s)+'</option>').join('');
