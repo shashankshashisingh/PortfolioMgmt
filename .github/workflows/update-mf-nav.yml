@@ -37,9 +37,20 @@ jobs:
           if ! git diff --cached --quiet; then
             git commit -m "Update MFapi mutual fund NAVs"
             for i in 1 2 3; do
-              git pull --rebase origin main && git push && exit 0
+              git fetch origin main
+              if ! git rebase -X theirs origin/main; then
+                echo "Rebase conflict; aborting and retrying with the latest remote state."
+                git rebase --abort || true
+                sleep 5
+                continue
+              fi
+              if git push; then
+                exit 0
+              fi
+              echo "Push was rejected; retrying against the latest main."
               sleep 5
             done
+            echo "Could not publish the NAV update after 3 attempts."
             exit 1
           else
             echo "No NAV changes to commit."
