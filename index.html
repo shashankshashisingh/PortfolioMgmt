@@ -805,6 +805,9 @@ async function loadCloudPortfolio(user){
   await persistCloudNow();
   compute();renderStatus();renderBanner();fillSymbolLists();setTab(activeTab);
   accountStatus('Signed in · '+user.email);
+  // Check the saved FYERS session immediately after the cloud portfolio is ready.
+  // If FYERS reports that authorization is required, pollFyersQuotes starts OAuth automatically.
+  await pollFyersQuotes(false);
 }
 async function initCloudAuth(){
   if(!cloudConfigured()){cloudReady=true;accountStatus('Cloud setup required');return}
@@ -1802,11 +1805,12 @@ async function handleFyersCallback(){
   const authCode=params.get('auth_code');
   const fyersError=params.get('s')==='error'||params.has('error');
   if(!authCode&&!fyersError)return;
-  if(fyersError){fyersStatus('FYERS authorization was not completed. Select Connect FYERS to try again.','err');history.replaceState(null,'',PAGES_URL);return}
-  if(!cloudClient||!cloudUser){fyersStatus('Sign in to PortfolioMgmt, then connect FYERS again.','err');return}
+  if(fyersError){sessionStorage.removeItem('portfolio-fyers-auto-started');fyersStatus('FYERS authorization was not completed. Please sign in to FYERS and try again.','err');history.replaceState(null,'',PAGES_URL);return}
+  if(!cloudClient||!cloudUser){sessionStorage.removeItem('portfolio-fyers-auto-started');fyersStatus('Sign in to PortfolioMgmt, then connect FYERS again.','err');return}
   const expected=sessionStorage.getItem('portfolio-fyers-state')||'';
   const received=params.get('state')||'';
   if(!expected||!received||expected!==received){
+    sessionStorage.removeItem('portfolio-fyers-auto-started');
     fyersStatus('Authorization state did not match. For security, please connect again.','err');
     history.replaceState(null,'',PAGES_URL);return;
   }
@@ -1816,6 +1820,7 @@ async function handleFyersCallback(){
     if(error)throw error;
     if(!data||!data.connected)throw new Error(data&&data.message||data&&data.error||'FYERS connection failed');
     sessionStorage.removeItem('portfolio-fyers-state');
+    sessionStorage.removeItem('portfolio-fyers-auto-started');
     history.replaceState(null,'',PAGES_URL+(location.hash||''));
     fyersStatus('FYERS connected. Live quotes will refresh automatically.','ok');
     await pollFyersQuotes(true);
@@ -1835,8 +1840,16 @@ async function pollFyersQuotes(show){
     const {data,error}=await cloudClient.functions.invoke('fyers-quotes',{body:{symbols:symbols.slice(0,100),indices}});
     if(error)throw error;
     if(data&&data.error){
-      if(data.error==='fyers_reauth_required')fyersStatus('FYERS needs authorization again. Select Connect FYERS.','err');
-      else fyersStatus('FYERS quotes unavailable: '+(data.message||data.error),'err');
+      if(data.error==='fyers_reauth_required'){
+        fyersStatus('Starting FYERS authorization…');
+        // Start OAuth automatically once per browser tab; FYERS still handles its own sign-in/consent.
+        if(!sessionStorage.getItem('portfolio-fyers-auto-started')){
+          sessionStorage.setItem('portfolio-fyers-auto-started','1');
+          await connectFyers();
+        }else{
+          fyersStatus('FYERS authorization is needed. Complete the FYERS sign-in window to continue.','err');
+        }
+      }else fyersStatus('FYERS quotes unavailable: '+(data.message||data.error),'err');
       return;
     }
     const quotes=data&&data.quotes||{};
